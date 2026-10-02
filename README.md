@@ -84,6 +84,24 @@ The report lists how many rows were read, rejected (with the reason and line of
 the first ones) and loaded, broken down by type and year. Run
 `npm run ingest -- --help` for every option.
 
+### Full text and chunks
+
+```bash
+npm run texts -- --limit 20   # try it on a few regulations first
+npm run texts                 # everything that is still pending
+```
+
+Each regulation's page is downloaded from InfoLEG, cleaned and split along its
+legal structure: preamble, one chunk per article, closing and annexes.
+Regulations without a published text get one chunk built from their title and
+abstract, so they stay searchable.
+
+The downloader is deliberately gentle: it identifies itself with a descriptive
+`User-Agent`, sends one request per second, backs off on errors and stops if the
+server starts refusing requests. Pages are cached under `data/infoleg/html/`, so
+the command can be interrupted and resumed, and re-chunking never downloads
+anything twice.
+
 ## Scripts
 
 | Command                    | What it does                             |
@@ -97,6 +115,7 @@ the first ones) and loaded, broken down by type and year. Run
 | `npm run test:integration` | Integration tests (needs `DATABASE_URL`) |
 | `npm run db:migrate`       | Apply SQL migrations                     |
 | `npm run ingest`           | Load regulations from the InfoLEG data   |
+| `npm run texts`            | Download, clean and chunk the full texts |
 
 ## Roadmap
 
@@ -104,7 +123,8 @@ the first ones) and loaded, broken down by type and year. Run
       Drizzle, bilingual routing, health check, tests and CI
 - [x] **2. Metadata ingestion** — validated, idempotent load of laws and decrees from
       the InfoLEG open dataset
-- [ ] **3. Full text and chunking** — fetch each regulation and split it by article
+- [x] **3. Full text and chunking** — polite, resumable download of each regulation,
+      split along its legal structure (preamble, articles, annexes)
 - [ ] **4. Embeddings and search** — provider layer (Ollama, Gemini) and similarity search
 - [ ] **5. Cited answers** — streamed answers grounded in the retrieved chunks
 - [ ] **6. Interface** — search screen with linked citations and filters

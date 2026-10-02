@@ -1,0 +1,2 @@
+# Fixture pages are kept byte for byte (ISO-8859-1, as served by InfoLEG).
+tests/fixtures/html/*.htm -text

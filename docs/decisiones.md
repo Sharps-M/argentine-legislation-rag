@@ -113,6 +113,58 @@ personales: solo vuelve buscable lo que ya está publicado.
 recuperados se envían a la API de Google, que puede usarlos para mejorar sus
 productos. Con un modelo local (Ollama) nada sale del equipo.
 
+## 14. Descarga respetuosa del sitio de InfoLEG
+
+**Decisión**: el texto de cada norma se baja con un cliente que se identifica
+(`User-Agent` con el nombre del proyecto y la URL del repositorio), hace un
+pedido por vez, espera un segundo entre pedidos y reintenta con espera creciente
+solo ante errores del servidor. Un 403 o un 404 no se reintenta, y tras cinco
+403 seguidos el comando se detiene.
+**Motivo**: es un servidor público que no publica reglas para programas. Lo
+correcto es decir quién pregunta, pedir despacio y parar si responde que no. El
+cliente por defecto de `curl` recibe 403; uno que se identifica, no.
+
+## 15. Páginas descargadas en caché local
+
+**Decisión**: cada página se guarda tal como llegó en `data/infoleg/html/`
+(fuera del repositorio). Volver a dividir en fragmentos lee de ahí.
+**Motivo**: la descarga es la parte lenta y la que usa un servidor ajeno. Con la
+caché, cambiar el algoritmo de división no vuelve a pedir nada, y un corte a
+mitad de camino se retoma donde quedó.
+
+## 16. Fragmentos según la estructura legal, no por tamaño fijo
+
+**Decisión**: una norma se divide en encabezado (título, VISTO, CONSIDERANDO),
+**un fragmento por artículo**, cierre (firmas, línea de publicación, notas de
+InfoLEG) y anexos. Solo las partes que superan el máximo (1.800 caracteres) se
+subdividen, por párrafo, y conservan su sección y su etiqueta.
+**Motivo**: el artículo es la unidad con sentido propio y la que se cita. Cortar
+cada N caracteres parte artículos por la mitad y mezcla el final de uno con el
+principio del siguiente. Los artículos citados entre comillas dentro de otro
+artículo no generan un corte, y los artículos de un tratado anexo se etiquetan
+como anexo para no confundirlos con los de la ley que lo aprueba.
+
+## 17. Las normas sin texto publicado se indexan por su resumen
+
+**Decisión**: cuando InfoLEG no publica el texto de una norma (cerca del 43% de
+los decretos del recorte), se genera un único fragmento con su tema, tipo y
+número, título y resumen.
+**Motivo**: siguen siendo normas vigentes que alguien puede buscar. Un resumen
+buscable es mejor que una norma invisible; el origen queda marcado (`summary`)
+para que la interfaz pueda avisarlo.
+
+## 18. Se prefiere el texto actualizado
+
+**Decisión**: si una norma tiene texto actualizado (consolidado con sus
+modificaciones), se usa ese; si no, el original.
+**Motivo**: quien pregunta qué dice una norma quiere saber qué dice hoy.
+
+## 19. Limitación conocida: anexos publicados como imagen
+
+Muchos anexos (tablas salariales, organigramas) están en InfoLEG como imágenes.
+De esos anexos solo queda el título; su contenido no se puede buscar. Leerlos
+requeriría OCR, que queda fuera del alcance.
+
 ---
 
 ## Desarrollo asistido por IA

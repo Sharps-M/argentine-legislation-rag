@@ -1,4 +1,12 @@
-import { date, index, integer, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  date,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 
 /**
  * A regulation (law, decree, resolution...) as published by InfoLEG.
@@ -37,3 +45,42 @@ export const regulations = pgTable(
 
 export type Regulation = typeof regulations.$inferSelect;
 export type NewRegulation = typeof regulations.$inferInsert;
+
+/**
+ * The plain text of a regulation, extracted from its InfoLEG page, or built
+ * from its title and summary when InfoLEG publishes no full text for it.
+ */
+export const regulationTexts = pgTable("regulation_texts", {
+  regulationId: integer("regulation_id")
+    .primaryKey()
+    .references(() => regulations.id, { onDelete: "cascade" }),
+  /** `updated` (consolidated text), `original` (as published) or `summary`. */
+  source: text("source").notNull(),
+  sourceUrl: text("source_url"),
+  content: text("content").notNull(),
+  /** SHA-256 of `content`: tells whether a re-fetched page actually changed. */
+  contentHash: text("content_hash").notNull(),
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A retrieval unit: one article, or a slice of a preamble or annex. */
+export const chunks = pgTable(
+  "chunks",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    regulationId: integer("regulation_id")
+      .notNull()
+      .references(() => regulations.id, { onDelete: "cascade" }),
+    ordinal: integer("ordinal").notNull(),
+    section: text("section").notNull(),
+    label: text("label"),
+    content: text("content").notNull(),
+  },
+  (table) => [
+    uniqueIndex("chunks_regulation_ordinal_idx").on(table.regulationId, table.ordinal),
+  ],
+);
+
+export type RegulationText = typeof regulationTexts.$inferSelect;
+export type NewRegulationText = typeof regulationTexts.$inferInsert;
+export type ChunkRow = typeof chunks.$inferSelect;

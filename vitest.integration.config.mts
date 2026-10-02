@@ -7,5 +7,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/integration/**/*.test.ts"],
+    // Every file works on the same database, so run them one after another.
+    fileParallelism: false,
   },
 });

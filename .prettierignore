@@ -3,3 +3,4 @@ node_modules
 drizzle/meta
 package-lock.json
 next-env.d.ts
+tests/fixtures
