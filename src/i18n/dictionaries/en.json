@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "title": "Normativa AR",
+    "description": "Semantic search over Argentine national legislation, with cited answers."
+  },
+  "home": {
+    "tagline": "Semantic search over Argentine national legislation",
+    "intro": "Ask in plain language and get an answer that cites the source regulation.",
+    "comingSoon": "Search is not available yet: the project is under construction.",
+    "disclaimer": "Not legal advice. Always check the official text."
+  },
+  "status": {
+    "heading": "System status",
+    "database": "Database",
+    "vectorSearch": "Vector search (pgvector)",
+    "up": "Available",
+    "down": "Unavailable"
+  },
+  "language": {
+    "label": "Language",
+    "es": "Español",
+    "en": "English"
+  }
+}

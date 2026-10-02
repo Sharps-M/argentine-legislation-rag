@@ -1,0 +1,24 @@
+{
+  "meta": {
+    "title": "Normativa AR",
+    "description": "Buscador semántico de normativa nacional argentina con respuestas citadas."
+  },
+  "home": {
+    "tagline": "Buscador semántico de normativa nacional argentina",
+    "intro": "Pregunte en lenguaje natural y reciba una respuesta con citas a la norma de origen.",
+    "comingSoon": "La búsqueda todavía no está disponible: el proyecto está en construcción.",
+    "disclaimer": "No es asesoramiento legal. Consulte siempre el texto oficial."
+  },
+  "status": {
+    "heading": "Estado del sistema",
+    "database": "Base de datos",
+    "vectorSearch": "Búsqueda vectorial (pgvector)",
+    "up": "Disponible",
+    "down": "No disponible"
+  },
+  "language": {
+    "label": "Idioma",
+    "es": "Español",
+    "en": "English"
+  }
+}
