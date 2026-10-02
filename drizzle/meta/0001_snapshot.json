@@ -1,0 +1,181 @@
+{
+  "id": "60861275-6316-4bbb-b8dc-ab352b39278c",
+  "prevId": "9ba36f41-8a73-465f-8970-a764fe412627",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.regulations": {
+      "name": "regulations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "number": {
+          "name": "number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "class": {
+          "name": "class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "issuing_body": {
+          "name": "issuing_body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enacted_on": {
+          "name": "enacted_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gazette_number": {
+          "name": "gazette_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gazette_date": {
+          "name": "gazette_date",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gazette_page": {
+          "name": "gazette_page",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "topic": {
+          "name": "topic",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "original_text_url": {
+          "name": "original_text_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_text_url": {
+          "name": "updated_text_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amended_by_count": {
+          "name": "amended_by_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "amends_count": {
+          "name": "amends_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "regulations_type_idx": {
+          "name": "regulations_type_idx",
+          "columns": [
+            {
+              "expression": "type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "regulations_enacted_on_idx": {
+          "name": "regulations_enacted_on_idx",
+          "columns": [
+            {
+              "expression": "enacted_on",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

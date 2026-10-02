@@ -68,6 +68,51 @@ verifican contra la base real lo que un doble no puede garantizar.
 **Motivo**: la compilación no depende de la red y la aplicación no envía datos
 de navegación a terceros.
 
+## 9. Ingesta como flujo validado, con informe
+
+**Decisión**: el CSV de InfoLEG se lee como flujo (`csv-parse`), cada fila se
+valida con Zod y las filas inválidas **se informan, no abortan** la carga. El
+comando termina con un informe: filas leídas, rechazadas (motivo y línea de las
+primeras), fuera del recorte y cargadas, por tipo y por año.
+**Motivo**: el archivo completo no entra cómodo en memoria, y un dato oficial
+mal cargado en una fila entre cientos de miles no puede frenar todo. El informe
+permite medir la calidad real del dataset en lugar de suponerla; `--dry-run` lo
+produce sin tocar la base.
+
+## 10. Carga idempotente por identificador de InfoLEG
+
+**Decisión**: la clave primaria de `regulations` es el `id_norma` de InfoLEG y
+la carga hace _upsert_. Volver a correr la ingesta actualiza las filas, no las
+duplica.
+**Motivo**: InfoLEG republica el dataset todos los meses, con normas nuevas y
+con cambios en las existentes (por ejemplo, cuántas normas las modifican).
+
+## 11. El recorte se aplica en la ingesta, no en la consulta
+
+**Decisión**: el subconjunto (tipos de norma y fecha mínima) se filtra al
+cargar. Por defecto: leyes y decretos de los últimos cinco años.
+**Motivo**: generar embeddings cuesta tiempo de cómputo por fragmento. Cargar
+solo lo que se va a indexar mantiene la base y el índice acotados; ampliar el
+recorte es volver a correr el comando con otros parámetros.
+
+## 12. La canalización no conoce la base de datos
+
+**Decisión**: `ingestRegulations` recibe un flujo de registros y un
+`RegulationStore`. El almacén real usa Drizzle; los tests usan uno en memoria.
+**Motivo**: las reglas (validar, filtrar, agrupar en lotes, contar) se prueban
+sin PostgreSQL. El test de integración verifica aparte el _upsert_ real.
+
+## 13. Se indexan todas las normas del recorte, incluidas las designaciones
+
+**Decisión**: no se excluyen los decretos de designación ni otras normas que
+nombran personas. Se cargan tal como los publica InfoLEG.
+**Motivo**: es información oficial, pública y con licencia abierta, y forma
+parte de lo que un usuario puede querer consultar. La aplicación no agrega datos
+personales: solo vuelve buscable lo que ya está publicado.
+**A tener en cuenta**: con el nivel gratuito de Gemini, los fragmentos
+recuperados se envían a la API de Google, que puede usarlos para mejorar sus
+productos. Con un modelo local (Ollama) nada sale del equipo.
+
 ---
 
 ## Desarrollo asistido por IA

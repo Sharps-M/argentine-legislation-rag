@@ -59,13 +59,30 @@ cp .env.example .env
 
 docker compose up -d      # PostgreSQL with pgvector
 npm install
-npm run db:migrate        # enables the pgvector extension
+npm run db:migrate        # creates the schema and enables pgvector
 npm run dev
 ```
 
 Open <http://localhost:3000>. The home page shows whether the database and
 vector search are available; `GET /api/health` returns the same report as JSON
 (`200` when healthy, `503` otherwise).
+
+## Loading the data
+
+Regulations come from the InfoLEG open dataset. The ingestion command downloads
+it, validates every row and loads the chosen subset (by default, laws and decrees
+from the last five years). It can be re-run at any time: rows are updated in
+place.
+
+```bash
+npm run ingest -- --download --dry-run   # validate and report, write nothing
+npm run ingest -- --download             # load into PostgreSQL
+npm run ingest -- --file data/infoleg/base-infoleg-normativa-nacional.zip --types Ley --since 2020-01-01
+```
+
+The report lists how many rows were read, rejected (with the reason and line of
+the first ones) and loaded, broken down by type and year. Run
+`npm run ingest -- --help` for every option.
 
 ## Scripts
 
@@ -79,12 +96,14 @@ vector search are available; `GET /api/health` returns the same report as JSON
 | `npm test`                 | Unit tests                               |
 | `npm run test:integration` | Integration tests (needs `DATABASE_URL`) |
 | `npm run db:migrate`       | Apply SQL migrations                     |
+| `npm run ingest`           | Load regulations from the InfoLEG data   |
 
 ## Roadmap
 
 - [x] **1. Project foundation** — Next.js, strict TypeScript, PostgreSQL + pgvector,
       Drizzle, bilingual routing, health check, tests and CI
-- [ ] **2. Metadata ingestion** — load laws and decrees from the InfoLEG open dataset
+- [x] **2. Metadata ingestion** — validated, idempotent load of laws and decrees from
+      the InfoLEG open dataset
 - [ ] **3. Full text and chunking** — fetch each regulation and split it by article
 - [ ] **4. Embeddings and search** — provider layer (Ollama, Gemini) and similarity search
 - [ ] **5. Cited answers** — streamed answers grounded in the retrieved chunks

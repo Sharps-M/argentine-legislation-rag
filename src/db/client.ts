@@ -1,4 +1,4 @@
-import { drizzle } from "drizzle-orm/postgres-js";
+import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 import { getEnv } from "@/env";
@@ -19,4 +19,8 @@ export function getSql(): Sql {
   return globalForDb.sql;
 }
 
-export const getDb = () => drizzle(getSql(), { schema });
+export type Database = PostgresJsDatabase<typeof schema>;
+
+export const createDb = (sql: Sql): Database => drizzle(sql, { schema });
+
+export const getDb = (): Database => createDb(getSql());
