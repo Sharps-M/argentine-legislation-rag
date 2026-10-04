@@ -4,6 +4,16 @@ const envSchema = z.object({
   DATABASE_URL: z
     .url({ protocol: /^postgres(ql)?$/ })
     .describe("PostgreSQL connection string, e.g. postgres://user:pass@host:5432/db"),
+  OLLAMA_BASE_URL: z
+    .url({ protocol: /^https?$/ })
+    .default("http://localhost:11434")
+    .describe("Where Ollama listens"),
+  EMBEDDING_MODEL: z
+    .string()
+    .trim()
+    .min(1)
+    .default("bge-m3")
+    .describe("Ollama model used for embeddings; must output 1,024 dimensions"),
 });
 
 export type Env = z.infer<typeof envSchema>;

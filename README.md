@@ -31,8 +31,9 @@ QUERY (every question)                                                    ▼
 question ─► embed question ─► nearest chunks ─► build context ─► cited answer
 ```
 
-The AI provider (embeddings and chat) sits behind one interface: Ollama for local
-development, the Gemini API free tier for the public demo.
+The AI provider sits behind one interface, so it can be swapped without touching
+the rest of the code. Embeddings run locally with Ollama (`bge-m3`); nothing
+leaves the machine.
 
 ## Tech stack
 
@@ -42,6 +43,8 @@ development, the Gemini API free tier for the public demo.
 | Language       | TypeScript (strict, `noUncheckedIndexedAccess`)     |
 | Database       | PostgreSQL 17 with pgvector                         |
 | Data access    | Drizzle ORM and SQL migrations                      |
+| AI             | Vercel AI SDK, Ollama (`bge-m3` embeddings)         |
+| Vector search  | pgvector HNSW index, cosine distance                |
 | Validation     | Zod (environment and input)                         |
 | Styling        | Tailwind CSS 4, light and dark themes               |
 | i18n           | Spanish and English, locale-prefixed routes         |
@@ -50,7 +53,8 @@ development, the Gemini API free tier for the public demo.
 
 ## Getting started
 
-Requirements: Node.js 22+ and Docker.
+Requirements: Node.js 22+, Docker and, for the embeddings,
+[Ollama](https://ollama.com) (pgvector 0.8 or newer comes with the Docker image).
 
 ```bash
 git clone https://github.com/Sharps-M/argentine-legislation-rag.git
@@ -102,6 +106,76 @@ server starts refusing requests. Pages are cached under `data/infoleg/html/`, so
 the command can be interrupted and resumed, and re-chunking never downloads
 anything twice.
 
+### Embeddings
+
+```bash
+ollama pull bge-m3              # once: the embedding model (about 1.2 GB)
+npm run embed -- --limit 200    # try it on a few chunks first
+npm run embed                   # everything that is still pending
+```
+
+Each chunk is embedded together with the name, topic and title of its
+regulation, and the vector is stored next to it in PostgreSQL with the name of
+the model that produced it. Batches are saved as they complete, so the command
+can be stopped and resumed. Changing `EMBEDDING_MODEL` marks every chunk as
+pending again: vectors from different models are never compared.
+
+## Searching
+
+```bash
+npm run search -- "convenio de seguridad social con San Marino"
+npm run search -- "impuesto a los combustibles" --type Decreto --from 2026 --limit 5
+```
+
+The same search is available over HTTP:
+
+```
+GET /api/search?q=impuesto a los combustibles&type=Decreto&from=2026&limit=5
+```
+
+| Parameter    | Meaning                                         |
+| ------------ | ----------------------------------------------- |
+| `q`          | The question, 3 to 500 characters (required)    |
+| `limit`      | Chunks to return, 1 to 20 (default 8)           |
+| `type`       | Regulation type; repeat or separate with commas |
+| `from`, `to` | Range of enactment years                        |
+
+It answers `200` with the chunks ordered by similarity, each with its
+regulation and a link to the official text; `400` with the list of problems when
+the request is invalid; and `503` when the embedding model cannot be reached.
+
+The question is embedded with the same model and compared by cosine distance
+through an HNSW index. Filters are part of the same SQL query, and iterative
+index scans keep a selective filter from returning fewer results than asked.
+
+### Measuring the retrieval
+
+```bash
+npm run eval
+```
+
+Runs a set of questions whose answer is known
+([`src/eval/questions.ts`](src/eval/questions.ts)) and reports, overall and by
+kind of question, **recall@k** (how often the right regulation is within the
+first _k_ chunks) and **MRR** (how close to the top it lands). It is the
+yardstick for every later change to chunking, the model or the search.
+`--verbose` shows what was retrieved instead of the expected regulation, and
+`--exact` bypasses the index to tell model misses from index misses.
+
+Baseline on the full corpus (5,069 regulations, 41,275 chunks) with semantic
+search alone:
+
+| Questions            | n   | recall@1 | recall@5 | MRR  |
+| -------------------- | --- | -------- | -------- | ---- |
+| All                  | 18  | 44%      | 72%      | 0.56 |
+| By topic             | 12  | 42%      | 83%      | 0.59 |
+| By regulation number | 4   | 50%      | 50%      | 0.50 |
+| In English           | 2   | 50%      | 50%      | 0.50 |
+
+Asking for a regulation by its number is the weak spot: an embedding captures
+meaning, not digits. Every measurement and what it led to is logged (in
+Spanish) in [`docs/evaluacion.md`](docs/evaluacion.md).
+
 ## Scripts
 
 | Command                    | What it does                             |
@@ -116,6 +190,18 @@ anything twice.
 | `npm run db:migrate`       | Apply SQL migrations                     |
 | `npm run ingest`           | Load regulations from the InfoLEG data   |
 | `npm run texts`            | Download, clean and chunk the full texts |
+| `npm run embed`            | Generate the embedding of each chunk     |
+| `npm run search`           | Semantic search from the command line    |
+| `npm run eval`             | Measure the retrieval (recall@k, MRR)    |
+
+The integration tests empty the tables they use, so they refuse to run against
+a database that holds a real ingestion. Use a separate database for them:
+
+```bash
+docker compose exec db createdb -U normativa normativa_test
+export DATABASE_URL=postgres://normativa:normativa@localhost:5432/normativa_test
+npm run db:migrate && npm run test:integration
+```
 
 ## Roadmap
 
@@ -125,7 +211,8 @@ anything twice.
       the InfoLEG open dataset
 - [x] **3. Full text and chunking** — polite, resumable download of each regulation,
       split along its legal structure (preamble, articles, annexes)
-- [ ] **4. Embeddings and search** — provider layer (Ollama, Gemini) and similarity search
+- [x] **4. Embeddings and search** — local embeddings behind a provider interface,
+      HNSW index, similarity search with filters and a retrieval evaluation
 - [ ] **5. Cited answers** — streamed answers grounded in the retrieved chunks
 - [ ] **6. Interface** — search screen with linked citations and filters
 - [ ] **7. Release** — screenshots, architecture notes and a public demo
@@ -142,7 +229,8 @@ agency. Always check the official text.
 
 ## Documentation
 
-Design decisions are recorded (in Spanish) in [`docs/decisiones.md`](docs/decisiones.md).
+Design decisions are recorded (in Spanish) in [`docs/decisiones.md`](docs/decisiones.md),
+and retrieval measurements in [`docs/evaluacion.md`](docs/evaluacion.md).
 
 ## License
 

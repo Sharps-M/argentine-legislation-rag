@@ -165,6 +165,86 @@ Muchos anexos (tablas salariales, organigramas) están en InfoLEG como imágenes
 De esos anexos solo queda el título; su contenido no se puede buscar. Leerlos
 requeriría OCR, que queda fuera del alcance.
 
+## 20. El proveedor de IA queda detrás de una interfaz propia
+
+**Decisión**: el resto del código depende de un tipo `Embedder` (modelo,
+dimensiones y una función que convierte textos en vectores), no de una
+biblioteca. La implementación actual usa el AI SDK contra el endpoint compatible
+con OpenAI de Ollama (`/v1/embeddings`).
+**Motivo**: cambiar de proveedor es escribir otra implementación de quince
+líneas, sin tocar la ingesta ni la búsqueda. Y los tests usan un `Embedder`
+determinista, sin modelo ni red.
+
+## 21. Embeddings locales con bge-m3
+
+**Decisión**: los vectores se generan en el equipo con `bge-m3` servido por
+Ollama: multilingüe, 1.024 dimensiones, licencia abierta.
+**Motivo**: es gratuito, entra en una placa de 6 GB y el texto de las normas no
+sale del equipo. Al ser multilingüe, una pregunta en inglés encuentra una norma
+en español sin traducir nada. Un servicio externo con nivel gratuito impondría
+límites de uso para vectorizar decenas de miles de fragmentos y ataría el índice
+a ese proveedor.
+
+## 22. Cada vector guarda el modelo que lo generó
+
+**Decisión**: `chunks` tiene la columna `embedding` y, al lado,
+`embedding_model`. Un fragmento está pendiente si no tiene vector o si el que
+tiene es de otro modelo, y la búsqueda solo compara vectores del modelo en uso.
+**Motivo**: los vectores de dos modelos viven en espacios distintos; compararlos
+da números sin sentido y sin ningún error que lo delate. Con el modelo guardado,
+cambiar `EMBEDDING_MODEL` hace que `npm run embed` rehaga lo necesario. Lo que sí
+exige una migración es cambiar de tamaño de vector, porque es parte del tipo de
+la columna; por eso el comando verifica las dimensiones antes de guardar.
+
+## 23. Se vectoriza el fragmento con el contexto de su norma
+
+**Decisión**: el texto que se envía al modelo es
+`norma · tema · título · artículo` seguido del contenido del fragmento. En la
+base se guarda el contenido sin ese encabezado.
+**Motivo**: un artículo suelto ("Comuníquese al Poder Ejecutivo nacional") no
+dice a qué norma pertenece. Con el encabezado, una pregunta que nombra la norma
+o su tema cae en los fragmentos correctos.
+
+## 24. Índice HNSW con distancia coseno y filtros en la misma consulta
+
+**Decisión**: índice HNSW de pgvector sobre `embedding` con `vector_cosine_ops`.
+La búsqueda ordena por distancia coseno y aplica los filtros (tipo de norma,
+años) en el mismo `SELECT`, con _iterative scan_ activado (pgvector 0.8 o
+superior).
+**Motivo**: HNSW no necesita entrenarse con los datos y responde en milisegundos
+a este volumen. Un índice aproximado devuelve primero sus candidatos más
+cercanos y recién después se aplican los filtros: con un filtro muy selectivo
+(solo leyes, que son una fracción mínima de los fragmentos) podían quedar menos
+resultados que los pedidos, o ninguno. El _iterative scan_ sigue recorriendo el
+índice hasta completar el límite. Un test de integración reproduce ese caso.
+**A tener en cuenta**: las filas borradas o reemplazadas siguen en el índice
+hasta que PostgreSQL las limpia (`VACUUM`), y mientras tanto la búsqueda las
+recorre sin poder devolverlas. Con decenas de miles acumuladas, medí búsquedas
+que devolvían menos resultados de los que había. Por eso `npm run embed` termina
+con un `VACUUM (ANALYZE)` de la tabla.
+
+## 25. La recuperación se mide con preguntas de respuesta conocida
+
+**Decisión**: `npm run eval` corre un conjunto de preguntas escritas leyendo la
+norma a la que apuntan y calcula _recall@k_ y MRR, en total y por tipo de
+pregunta (tema, referencia por número, inglés). Se mide a nivel de fragmento: en
+qué posición aparece el primer fragmento de la norma esperada.
+**Motivo**: sin una medida, cambiar el tamaño de los fragmentos o el modelo es
+adivinar. Separar por tipo muestra dónde falla la búsqueda semántica (por
+ejemplo, al pedir una norma por su número) y orienta qué mejorar.
+**Limitación**: son pocas preguntas sobre nueve normas. Sirve para detectar
+regresiones y comparar variantes, no como medida absoluta de calidad.
+
+## 26. Una sola validación para el endpoint y la línea de comandos
+
+**Decisión**: `GET /api/search` y `npm run search` validan los parámetros con el
+mismo esquema Zod. El endpoint responde 400 con la lista de problemas, 503 si no
+se puede consultar el modelo de embeddings y 200 con los resultados (una lista
+vacía es una respuesta válida).
+**Motivo**: las reglas (largo de la pregunta, límite máximo, rango de años)
+existen en un solo lugar. Distinguir el 503 del 500 le dice a quien llama que el
+problema es un servicio caído y no un error del programa.
+
 ---
 
 ## Desarrollo asistido por IA

@@ -16,9 +16,14 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env src/db/migrate.ts",
     "ingest": "tsx --env-file-if-exists=.env src/ingest/cli.ts",
-    "texts": "tsx --env-file-if-exists=.env src/texts/cli.ts"
+    "texts": "tsx --env-file-if-exists=.env src/texts/cli.ts",
+    "embed": "tsx --env-file-if-exists=.env src/embeddings/cli.ts",
+    "search": "tsx --env-file-if-exists=.env src/search/cli.ts",
+    "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.62",
+    "ai": "^7.0.127",
     "csv-parse": "^7.0.3",
     "drizzle-orm": "^0.45.3",
     "htmlparser2": "^12.0.0",

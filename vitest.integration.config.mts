@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/integration/**/*.test.ts"],
+    // These tests empty the tables: refuse to run against a real ingestion.
+    globalSetup: ["tests/integration/global-setup.ts"],
     // Every file works on the same database, so run them one after another.
     fileParallelism: false,
   },

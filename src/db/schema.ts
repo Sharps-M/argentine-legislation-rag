@@ -6,7 +6,15 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  vector,
 } from "drizzle-orm/pg-core";
+
+/**
+ * Size of the embedding vectors. It is a property of the embedding model
+ * (bge-m3 produces 1,024 dimensions) and of the column: changing the model for
+ * one with another size needs a migration and a full re-embedding.
+ */
+export const EMBEDDING_DIMENSIONS = 1024;
 
 /**
  * A regulation (law, decree, resolution...) as published by InfoLEG.
@@ -75,9 +83,18 @@ export const chunks = pgTable(
     section: text("section").notNull(),
     label: text("label"),
     content: text("content").notNull(),
+    /** `null` until `npm run embed` processes the chunk. */
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
+    /** Model that produced `embedding`: vectors from different models never mix. */
+    embeddingModel: text("embedding_model"),
   },
   (table) => [
     uniqueIndex("chunks_regulation_ordinal_idx").on(table.regulationId, table.ordinal),
+    // Approximate nearest-neighbour search by cosine distance.
+    index("chunks_embedding_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops"),
+    ),
   ],
 );
 

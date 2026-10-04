@@ -22,4 +22,31 @@ describe("parseEnv", () => {
       /Invalid environment variables/,
     );
   });
+
+  it("defaults to a local Ollama with bge-m3", () => {
+    const env = parseEnv({ DATABASE_URL: "postgres://localhost/db" });
+
+    expect(env.OLLAMA_BASE_URL).toBe("http://localhost:11434");
+    expect(env.EMBEDDING_MODEL).toBe("bge-m3");
+  });
+
+  it("lets the Ollama address and the model be overridden", () => {
+    const env = parseEnv({
+      DATABASE_URL: "postgres://localhost/db",
+      OLLAMA_BASE_URL: "http://192.168.0.10:11434",
+      EMBEDDING_MODEL: " other-model ",
+    });
+
+    expect(env.OLLAMA_BASE_URL).toBe("http://192.168.0.10:11434");
+    expect(env.EMBEDDING_MODEL).toBe("other-model");
+  });
+
+  it("rejects an Ollama address that is not an HTTP URL", () => {
+    expect(() =>
+      parseEnv({
+        DATABASE_URL: "postgres://localhost/db",
+        OLLAMA_BASE_URL: "localhost",
+      }),
+    ).toThrowError(/OLLAMA_BASE_URL/);
+  });
 });
