@@ -90,9 +90,10 @@ async function main() {
       const where = [regulation.name, hit.label].filter(Boolean).join(" · ");
       const summaryOnly =
         regulation.textSource === "summary" ? "  [abstract only]" : "";
+      const cited = hit.match === "reference" ? "  [cited by number]" : "";
 
       console.log(
-        `\n${String(index + 1).padStart(2)}. ${hit.similarity.toFixed(3)}  ${where}${summaryOnly}`,
+        `\n${String(index + 1).padStart(2)}. ${hit.similarity.toFixed(3)}  ${where}${cited}${summaryOnly}`,
       );
       if (regulation.title) console.log(`    ${snippet(regulation.title, 100)}`);
       console.log(`    ${snippet(hit.content)}`);

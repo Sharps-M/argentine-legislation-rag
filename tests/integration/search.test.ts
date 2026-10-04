@@ -9,7 +9,12 @@ import {
   resetEmbeddings,
   vacuumChunks,
 } from "@/embeddings/store";
-import { infolegUrl, QueryEmbeddingError, searchChunks } from "@/search/search";
+import {
+  infolegUrl,
+  QueryEmbeddingError,
+  searchByVector,
+  searchChunks,
+} from "@/search/search";
 
 import { createHashingEmbedder, hashingVector } from "../support/hashing-embedder";
 
@@ -245,6 +250,28 @@ describe("semantic search", () => {
     );
   });
 
+  it("accepts a wider index search and rejects a setting out of range", async () => {
+    const hits = await search("venta del material rodante", { efSearch: 200 });
+    expect(hits[0]?.regulation.name).toBe("Decreto 282/2026");
+
+    await expect(search("venta del material rodante", { efSearch: 0 })).rejects.toThrow(
+      RangeError,
+    );
+    await expect(
+      search("venta del material rodante", { efSearch: 1.5 }),
+    ).rejects.toThrow(RangeError);
+    await expect(
+      search("venta del material rodante", { efSearch: 5000 }),
+    ).rejects.toThrow(RangeError);
+  });
+
+  it("searches with a vector computed beforehand", async () => {
+    const question = "convenio de seguridad social con San Marino";
+    const byVector = await searchByVector(db, embedder.model, hashingVector(question));
+
+    expect(byVector).toEqual(await search(question));
+  });
+
   it("respects the limit", async () => {
     expect(await search("impuesto a los combustibles", { limit: 2 })).toHaveLength(2);
   });
@@ -319,6 +346,108 @@ describe("semantic search", () => {
     await expect(searchChunks(db, offline, "combustibles")).rejects.toThrow(
       QueryEmbeddingError,
     );
+  });
+
+  describe("regulations cited by number", () => {
+    it("puts the cited law first, even when the wording points elsewhere", async () => {
+      // The words match the fuel decree; the number names the law.
+      const question = "impuesto sobre los combustibles líquidos según la Ley 27.817";
+
+      const byMeaning = await search(question, { references: [] });
+      expect(byMeaning[0]?.regulation.id).toBe(300001);
+
+      const hits = await search(question);
+
+      expect(hits[0]).toMatchObject({
+        match: "reference",
+        regulation: { id: 427766, name: "Ley 27817" },
+      });
+      expect(hits.some((hit) => hit.regulation.id === 300001)).toBe(true);
+    });
+
+    it("marks every chunk with the reason it was found", async () => {
+      const hits = await search("Ley 27817");
+      const cited = hits.filter((hit) => hit.match === "reference");
+
+      expect(cited.map((hit) => hit.regulation.id)).toEqual([427766, 427766]);
+      expect(hits.slice(0, 2)).toEqual(cited);
+      expect(hits.slice(2).every((hit) => hit.match === "semantic")).toBe(true);
+    });
+
+    it("does not return a chunk twice", async () => {
+      const ids = (await search("Ley 27817")).map((hit) => hit.chunkId);
+
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toHaveLength(4);
+    });
+
+    it("tells decrees with the same number apart by their year", async () => {
+      await db.insert(regulations).values({
+        id: 300002,
+        type: "Decreto",
+        number: "282",
+        enactedOn: "2023-05-10",
+        topic: "OTRO TEMA",
+        title: "DESIGNACION",
+      });
+      await db.insert(chunks).values({
+        regulationId: 300002,
+        ordinal: 0,
+        section: "summary",
+        content: "Dase por designado un funcionario.",
+      });
+      await embedAll();
+
+      const dated = await search("Decreto 282/2023");
+      expect(dated[0]).toMatchObject({
+        match: "reference",
+        regulation: { id: 300002 },
+      });
+      expect(dated.filter((hit) => hit.match === "reference")).toHaveLength(1);
+
+      // Without a year both are cited, and the wording decides the order.
+      const undated = await search("venta del material rodante, decreto 282");
+      const cited = undated.filter((hit) => hit.match === "reference");
+      expect(cited.map((hit) => hit.regulation.id)).toEqual([425217, 300002]);
+    });
+
+    it("gives the cited regulation at most half of the results", async () => {
+      await db.insert(chunks).values(
+        Array.from({ length: 6 }, (_, index) => ({
+          regulationId: 427766,
+          ordinal: 10 + index,
+          section: "annex",
+          content: `Anexo del convenio, parte ${index}.`,
+          embedding: hashingVector(`anexo convenio parte ${index}`),
+          embeddingModel: "test-hashing",
+        })),
+      );
+
+      const hits = await search("Ley 27817", { limit: 4 });
+
+      expect(hits).toHaveLength(4);
+      expect(hits.filter((hit) => hit.match === "reference")).toHaveLength(2);
+    });
+
+    it("applies the filters to the cited regulation too", async () => {
+      const hits = await search("Ley 27817", { types: ["Decreto"] });
+
+      expect(hits.every((hit) => hit.match === "semantic")).toBe(true);
+      expect(hits.every((hit) => hit.regulation.type === "Decreto")).toBe(true);
+    });
+
+    it("falls back to meaning when the number matches nothing", async () => {
+      const hits = await search("convenio de seguridad social, Ley 99999");
+
+      expect(hits.every((hit) => hit.match === "semantic")).toBe(true);
+      expect(hits[0]?.regulation.id).toBe(427766);
+    });
+
+    it("can be left out, for measuring the similarity search alone", async () => {
+      const hits = await search("Ley 27817", { references: [] });
+
+      expect(hits.every((hit) => hit.match === "semantic")).toBe(true);
+    });
   });
 
   it("fills the limit through the index when the filter is very selective", async () => {

@@ -217,6 +217,10 @@ cercanos y recién después se aplican los filtros: con un filtro muy selectivo
 (solo leyes, que son una fracción mínima de los fragmentos) podían quedar menos
 resultados que los pedidos, o ninguno. El _iterative scan_ sigue recorriendo el
 índice hasta completar el límite. Un test de integración reproduce ese caso.
+**Configuración**: `hnsw.ef_search = 100`, elegido midiendo. Con el valor por
+defecto de pgvector (40) el índice perdía respuestas que la búsqueda exacta
+encontraba; con 100 devuelve lo mismo que la exacta en 5 ms en lugar de 133. El
+detalle está en `docs/evaluacion.md`.
 **A tener en cuenta**: las filas borradas o reemplazadas siguen en el índice
 hasta que PostgreSQL las limpia (`VACUUM`), y mientras tanto la búsqueda las
 recorre sin poder devolverlas. Con decenas de miles acumuladas, medí búsquedas
@@ -244,6 +248,30 @@ vacía es una respuesta válida).
 **Motivo**: las reglas (largo de la pregunta, límite máximo, rango de años)
 existen en un solo lugar. Distinguir el 503 del 500 le dice a quien llama que el
 problema es un servicio caído y no un error del programa.
+
+## 27. Búsqueda por número de norma, además de por significado
+
+**Decisión**: si la pregunta cita una norma ("Ley 27.818", "Decreto N°
+833/2026", "DNU 70/23"), se la busca por tipo, número y año con una consulta
+exacta, y sus fragmentos van primeros. El resto de los resultados sale de la
+búsqueda por similitud. Cada resultado indica por qué apareció (`reference` o
+`semantic`).
+**Motivo**: es una herramienta de consulta legal. Quien cita una norma por su
+número espera esa norma, siempre, y no "la más parecida". La búsqueda semántica
+sola lo resolvía en las mediciones, pero dependía del modelo y de la
+configuración del índice; una consulta exacta es determinista y se puede
+garantizar con un test.
+**Reglas**:
+
+- Hace falta la palabra del tipo ("decreto 833/2026"). Un "12/2025" suelto puede
+  ser un mes, y adivinar mal pondría primera una norma que no tiene nada que
+  ver.
+- Las leyes no llevan año: se numeran una sola vez. Los decretos sí; sin año,
+  se toman los más recientes con ese número.
+- La norma citada ocupa como máximo la mitad de los resultados: el resto queda
+  para lo que la pregunta pide ("¿qué dice el Decreto 833/2026 sobre los
+  residentes?" puede necesitar otra norma).
+- Los filtros de tipo y año se aplican también a la norma citada.
 
 ---
 

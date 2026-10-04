@@ -5,6 +5,7 @@ import { QueryEmbeddingError, type SearchHit, type SearchOptions } from "./searc
 
 const hit: SearchHit = {
   chunkId: 1,
+  match: "semantic",
   similarity: 0.87,
   section: "article",
   label: "Artículo 1",

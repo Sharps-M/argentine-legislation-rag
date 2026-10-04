@@ -125,6 +125,7 @@ pending again: vectors from different models are never compared.
 ```bash
 npm run search -- "convenio de seguridad social con San Marino"
 npm run search -- "impuesto a los combustibles" --type Decreto --from 2026 --limit 5
+npm run search -- "¿qué dispone el Decreto 833/2026?"
 ```
 
 The same search is available over HTTP:
@@ -144,9 +145,20 @@ It answers `200` with the chunks ordered by similarity, each with its
 regulation and a link to the official text; `400` with the list of problems when
 the request is invalid; and `503` when the embedding model cannot be reached.
 
-The question is embedded with the same model and compared by cosine distance
-through an HNSW index. Filters are part of the same SQL query, and iterative
-index scans keep a selective filter from returning fewer results than asked.
+Two searches are combined, the way a legal clerk would work:
+
+- **By citation.** If the question names a regulation ("Ley 27.818",
+  "Decreto N° 833/2026", "DNU 70/23"), it is looked up by type, number and
+  year, and its chunks go first. This is exact: it does not depend on the model
+  or on the index.
+- **By meaning.** The question is embedded with the same model and compared by
+  cosine distance through an HNSW index. Filters are part of the same SQL
+  query, and iterative index scans keep a selective filter from returning fewer
+  results than asked.
+
+Each result says why it is there (`"match": "reference"` or `"semantic"`). A
+cited regulation takes at most half of the results, so the rest stay open to
+what the question is about.
 
 ### Measuring the retrieval
 
@@ -159,22 +171,26 @@ Runs a set of questions whose answer is known
 kind of question, **recall@k** (how often the right regulation is within the
 first _k_ chunks) and **MRR** (how close to the top it lands). It is the
 yardstick for every later change to chunking, the model or the search.
-`--verbose` shows what was retrieved instead of the expected regulation, and
-`--exact` bypasses the index to tell model misses from index misses.
+`--verbose` shows what was retrieved instead of the expected regulation,
+`--exact` bypasses the index to tell model misses from index misses,
+`--semantic-only` leaves the lookup by citation out, and `--sweep` compares
+index settings against the exact scan, in quality and time.
 
-Baseline on the full corpus (5,069 regulations, 41,275 chunks) with semantic
-search alone:
+Measured on the full corpus (5,069 regulations, 41,275 chunks), 18 questions,
+similarity search alone:
 
-| Questions            | n   | recall@1 | recall@5 | MRR  |
-| -------------------- | --- | -------- | -------- | ---- |
-| All                  | 18  | 44%      | 72%      | 0.56 |
-| By topic             | 12  | 42%      | 83%      | 0.59 |
-| By regulation number | 4   | 50%      | 50%      | 0.50 |
-| In English           | 2   | 50%      | 50%      | 0.50 |
+| Search                         | recall@1 | recall@5 | MRR  | Time per query |
+| ------------------------------ | -------- | -------- | ---- | -------------- |
+| Exact scan (no index)          | 61%      | 89%      | 0.73 | 133 ms         |
+| HNSW index, pgvector's default | 44%      | 72%      | 0.56 | 4 ms           |
+| HNSW index, `ef_search = 100`  | 61%      | 89%      | 0.73 | 5 ms           |
 
-Asking for a regulation by its number is the weak spot: an embedding captures
-meaning, not digits. Every measurement and what it led to is logged (in
-Spanish) in [`docs/evaluacion.md`](docs/evaluacion.md).
+With its default settings the approximate index was skipping answers the model
+does find; at `ef_search = 100` it returns the same results as the exact scan,
+about 25 times faster. That is the value the search uses. What even the exact scan
+still misses are decrees reissued every few months with near-identical
+articles. Every measurement and what it led to is logged (in Spanish) in
+[`docs/evaluacion.md`](docs/evaluacion.md).
 
 ## Scripts
 
