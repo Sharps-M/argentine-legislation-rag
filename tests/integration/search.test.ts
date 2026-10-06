@@ -184,8 +184,10 @@ describe("chunk embeddings in PostgreSQL", () => {
 
 describe("semantic search", () => {
   const embedder = createHashingEmbedder();
+  // The stand-in model scores far lower than the real one, so these tests turn
+  // the similarity floor off unless they are about it.
   const search = (query: string, options = {}) =>
-    searchChunks(db, embedder, query, options);
+    searchChunks(db, embedder, query, { minSimilarity: 0, ...options });
 
   beforeEach(async () => {
     await embedAll();
@@ -267,7 +269,9 @@ describe("semantic search", () => {
 
   it("searches with a vector computed beforehand", async () => {
     const question = "convenio de seguridad social con San Marino";
-    const byVector = await searchByVector(db, embedder.model, hashingVector(question));
+    const byVector = await searchByVector(db, embedder.model, hashingVector(question), {
+      minSimilarity: 0,
+    });
 
     expect(byVector).toEqual(await search(question));
   });
@@ -346,6 +350,45 @@ describe("semantic search", () => {
     await expect(searchChunks(db, offline, "combustibles")).rejects.toThrow(
       QueryEmbeddingError,
     );
+  });
+
+  describe("similarity floor", () => {
+    const question = "convenio de seguridad social con San Marino";
+
+    it("keeps only the chunks that are close enough", async () => {
+      const all = await search(question);
+      const floor = (all[0]!.similarity + all[1]!.similarity) / 2;
+
+      const hits = await search(question, { minSimilarity: floor });
+
+      expect(hits).toEqual([all[0]]);
+    });
+
+    it("returns nothing when no chunk is close enough", async () => {
+      expect(await search("reglas del ajedrez", { minSimilarity: 0.5 })).toEqual([]);
+    });
+
+    it("applies a floor by default", async () => {
+      // No chunk scores anywhere near the default with the stand-in model.
+      expect(await searchChunks(db, embedder, question)).toEqual([]);
+    });
+
+    it("never drops a regulation cited by number", async () => {
+      const hits = await search("Ley 27817", { minSimilarity: 1 });
+
+      expect(hits.length).toBeGreaterThan(0);
+      expect(hits.every((hit) => hit.match === "reference")).toBe(true);
+      expect(hits.every((hit) => hit.regulation.id === 427766)).toBe(true);
+    });
+
+    it("rejects a floor outside 0 to 1", async () => {
+      await expect(search(question, { minSimilarity: 1.5 })).rejects.toThrow(
+        RangeError,
+      );
+      await expect(search(question, { minSimilarity: -0.1 })).rejects.toThrow(
+        RangeError,
+      );
+    });
   });
 
   describe("regulations cited by number", () => {
@@ -481,6 +524,7 @@ describe("semantic search", () => {
       return searchChunks(tx, embedder, "impuesto sobre los combustibles líquidos", {
         types: ["Ley"],
         limit: 5,
+        minSimilarity: 0,
       });
     });
 

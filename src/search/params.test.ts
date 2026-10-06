@@ -29,6 +29,15 @@ describe("parseSearchParams", () => {
     });
   });
 
+  it("reads the minimum similarity", () => {
+    expect(parse("q=combustibles&min_similarity=0.65")).toMatchObject({
+      options: { minSimilarity: 0.65 },
+    });
+    expect(parse("q=combustibles&min_similarity=0")).toMatchObject({
+      options: { minSimilarity: 0 },
+    });
+  });
+
   it("accepts comma-separated types", () => {
     expect(parse("q=combustibles&type=Ley,%20Decreto")).toMatchObject({
       options: { types: ["Ley", "Decreto"] },
@@ -36,7 +45,7 @@ describe("parseSearchParams", () => {
   });
 
   it("treats empty values as absent", () => {
-    expect(parse("q=combustibles&limit=&type=&from=&to=")).toEqual({
+    expect(parse("q=combustibles&limit=&type=&from=&to=&min_similarity=")).toEqual({
       ok: true,
       query: "combustibles",
       options: { limit: 8 },
@@ -54,6 +63,13 @@ describe("parseSearchParams", () => {
     ["a year that is not a whole number", "q=combustibles&to=2026.5", "to"],
     ["a range that ends before it starts", "q=combustibles&from=2026&to=2024", "from"],
     ["too many types", "q=combustibles&type=a,b,c,d,e,f", "type"],
+    ["a similarity above 1", "q=combustibles&min_similarity=1.2", "min_similarity"],
+    ["a negative similarity", "q=combustibles&min_similarity=-1", "min_similarity"],
+    [
+      "a similarity that is not a number",
+      "q=combustibles&min_similarity=high",
+      "min_similarity",
+    ],
   ])("rejects %s", (_case, query, field) => {
     const result = parse(query);
 

@@ -2,13 +2,15 @@
  * - `topic`: describes what the regulation is about, in everyday words.
  * - `reference`: names the regulation by its number.
  * - `english`: asked in English, to check cross-language retrieval.
+ * - `absent`: about a subject the corpus does not cover. The right outcome is
+ *   no result at all.
  */
-export type QuestionKind = "topic" | "reference" | "english";
+export type QuestionKind = "topic" | "reference" | "english" | "absent";
 
 export type GoldQuestion = {
   question: string;
   kind: QuestionKind;
-  /** InfoLEG ids of the regulations that answer the question. */
+  /** InfoLEG ids of the regulations that answer the question; none for `absent`. */
   expected: number[];
 };
 
@@ -137,4 +139,19 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
     kind: "topic",
     expected: [429385],
   },
+
+  // Subjects without a regulation in the corpus (laws and decrees of the last
+  // five years). The first two were checked against it on 2026-10-04: the
+  // nearest chunks were about zoonoses and loose livestock. Dog racing was
+  // banned by a law from 2016, outside the subset. The last two are not legal
+  // subjects at all.
+  { question: "Normativas relacionadas con mascotas", kind: "absent", expected: [] },
+  { question: "Castrar perros", kind: "absent", expected: [] },
+  { question: "Prohibición de las carreras de galgos", kind: "absent", expected: [] },
+  {
+    question: "Reglas del ajedrez para torneos escolares",
+    kind: "absent",
+    expected: [],
+  },
+  { question: "Receta de empanadas salteñas", kind: "absent", expected: [] },
 ];

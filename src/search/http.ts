@@ -1,11 +1,18 @@
 import { parseSearchParams } from "./params";
-import { QueryEmbeddingError, type SearchHit, type SearchOptions } from "./search";
+import {
+  DEFAULT_MIN_SIMILARITY,
+  QueryEmbeddingError,
+  type SearchHit,
+  type SearchOptions,
+} from "./search";
 
 export type SearchFn = (query: string, options: SearchOptions) => Promise<SearchHit[]>;
 
 export type SearchResponseBody = {
   query: string;
   model: string;
+  /** How close a chunk had to be to count; explains an empty list. */
+  minSimilarity: number;
   results: SearchHit[];
 };
 
@@ -15,7 +22,8 @@ export type SearchResponseBody = {
  *
  * - `400` the request is invalid (the body lists each problem)
  * - `503` the embedding model cannot be reached
- * - `200` results, best first (an empty list is a valid answer)
+ * - `200` results, best first (an empty list is a valid answer: no regulation
+ *   is close enough to the question)
  */
 export async function searchResponse(
   params: URLSearchParams,
@@ -33,7 +41,12 @@ export async function searchResponse(
 
   try {
     const results = await search(request.query, request.options);
-    const body: SearchResponseBody = { query: request.query, model, results };
+    const body: SearchResponseBody = {
+      query: request.query,
+      model,
+      minSimilarity: request.options.minSimilarity ?? DEFAULT_MIN_SIMILARITY,
+      results,
+    };
 
     return Response.json(body);
   } catch (error) {

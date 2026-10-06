@@ -46,11 +46,35 @@ export type SearchOptions = SearchFilters & {
    */
   efSearch?: number;
   /**
+   * Drop the chunks found by meaning whose similarity is below this value.
+   * Without it the search always returns its nearest chunks, however far they
+   * are: asked about something no regulation covers, it would answer with
+   * whatever is least unrelated. `0` keeps everything.
+   */
+  minSimilarity?: number;
+  /**
    * Regulations the question cites by number. Their chunks come first,
    * whatever the similarity search finds. `searchChunks` fills this in.
    */
   references?: RegulationReference[];
 };
+
+/**
+ * Chosen by measuring (docs/evaluacion.md): the first chunk of the right
+ * regulation scored 0.59 or more in every question, and questions about
+ * subjects the corpus does not cover stayed at 0.561 or less. The window is
+ * narrow; run `npm run eval -- --floors` again when the corpus changes.
+ */
+export const DEFAULT_MIN_SIMILARITY = 0.57;
+
+/**
+ * Whether a result is close enough to be shown. A regulation cited by number
+ * always is: it was asked for by name.
+ */
+export const isCloseEnough = (
+  hit: Pick<SearchHit, "match" | "similarity">,
+  minSimilarity: number,
+) => hit.match === "reference" || hit.similarity >= minSimilarity;
 
 /** Regulations looked up per citation; the most recent ones win. */
 const MAX_REGULATIONS_PER_REFERENCE = 3;
@@ -143,6 +167,11 @@ export async function searchByVector(
   options: SearchOptions = {},
 ): Promise<SearchHit[]> {
   const limit = Math.min(options.limit ?? DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
+
+  const minSimilarity = options.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+  if (!(minSimilarity >= 0 && minSimilarity <= 1)) {
+    throw new RangeError(`minSimilarity must be between 0 and 1, got ${minSimilarity}`);
+  }
 
   const efSearch = options.efSearch ?? DEFAULT_EF_SEARCH;
   if (!Number.isInteger(efSearch) || efSearch < 1 || efSearch > MAX_EF_SEARCH) {
@@ -293,5 +322,7 @@ export async function searchByVector(
     ...semantic
       .filter((row) => !citedChunks.has(row.chunkId))
       .map((row) => toHit(row, "semantic")),
-  ].slice(0, limit);
+  ]
+    .filter((hit) => isCloseEnough(hit, minSimilarity))
+    .slice(0, limit);
 }

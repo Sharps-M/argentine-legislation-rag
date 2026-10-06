@@ -134,12 +134,13 @@ The same search is available over HTTP:
 GET /api/search?q=impuesto a los combustibles&type=Decreto&from=2026&limit=5
 ```
 
-| Parameter    | Meaning                                         |
-| ------------ | ----------------------------------------------- |
-| `q`          | The question, 3 to 500 characters (required)    |
-| `limit`      | Chunks to return, 1 to 20 (default 8)           |
-| `type`       | Regulation type; repeat or separate with commas |
-| `from`, `to` | Range of enactment years                        |
+| Parameter        | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `q`              | The question, 3 to 500 characters (required)              |
+| `limit`          | Chunks to return, 1 to 20 (default 8)                     |
+| `type`           | Regulation type; repeat or separate with commas           |
+| `from`, `to`     | Range of enactment years                                  |
+| `min_similarity` | How close a chunk must be to count, 0 to 1 (default 0.57) |
 
 It answers `200` with the chunks ordered by similarity, each with its
 regulation and a link to the official text; `400` with the list of problems when
@@ -160,6 +161,15 @@ Each result says why it is there (`"match": "reference"` or `"semantic"`). A
 cited regulation takes at most half of the results, so the rest stay open to
 what the question is about.
 
+The search is strict about the question: a chunk found by meaning must reach a
+minimum similarity, or it is left out. A similarity search always has a
+"nearest" chunk, however far; asked about pets, it used to answer with
+regulations on zoonoses and livestock. Now, when nothing is close enough, the
+answer is an empty list and the command says so. A regulation cited by number
+is never left out. The minimum, 0.57, was chosen by measuring: it keeps every
+right answer of the evaluation and rejects its five questions about subjects
+the corpus does not cover.
+
 ### Measuring the retrieval
 
 ```bash
@@ -173,8 +183,11 @@ first _k_ chunks) and **MRR** (how close to the top it lands). It is the
 yardstick for every later change to chunking, the model or the search.
 `--verbose` shows what was retrieved instead of the expected regulation,
 `--exact` bypasses the index to tell model misses from index misses,
-`--semantic-only` leaves the lookup by citation out, and `--sweep` compares
-index settings against the exact scan, in quality and time.
+`--semantic-only` leaves the lookup by citation out, `--sweep` compares index
+settings against the exact scan, in quality and time, and `--floors` compares
+minimum similarities: answers kept against unrelated results rejected. The set
+includes questions about subjects the corpus does not cover, which must come
+back empty.
 
 Measured on the full corpus (5,069 regulations, 41,275 chunks), 18 questions,
 similarity search alone:

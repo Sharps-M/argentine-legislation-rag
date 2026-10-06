@@ -10,6 +10,8 @@ import { getEnv } from "../env";
 import { findReferences } from "../search/references";
 import {
   DEFAULT_EF_SEARCH,
+  DEFAULT_MIN_SIMILARITY,
+  isCloseEnough,
   MAX_EF_SEARCH,
   MAX_SEARCH_LIMIT,
   QueryEmbeddingError,
@@ -17,7 +19,7 @@ import {
   type SearchHit,
   type SearchOptions,
 } from "../search/search";
-import { evaluate, type EvalReport, type Metrics } from "./metrics";
+import { evaluate, isAbsent, type EvalReport, type Metrics } from "./metrics";
 import { GOLD_QUESTIONS, type GoldQuestion } from "./questions";
 
 const HELP = `
@@ -29,6 +31,8 @@ chunk that belongs to the expected regulation, and overall:
 
   recall@k  share of questions answered within the first k chunks
   MRR       mean reciprocal rank (1 = always first)
+  rejected  questions about subjects the corpus does not cover that came back
+            empty, as they should
 
 Questions whose regulation has no embedded chunks yet are skipped.
 
@@ -37,6 +41,10 @@ Options:
   --exact             Skip the vector index and compare against every chunk
   --ef-search <n>     Candidates the index keeps while searching (default: ${DEFAULT_EF_SEARCH})
   --semantic-only     Ignore regulations cited by number: similarity search alone
+  --min-similarity <0-1>
+                      How close a chunk must be to count (default: ${DEFAULT_MIN_SIMILARITY})
+  --floors            Compare several --min-similarity values: answers kept
+                      against unrelated results rejected, in one table
   --sweep             Compare the exact search with several --ef-search values:
                       quality and time per question, in one table (semantic only)
   --min-recall <0-1>  Exit with an error if recall@5 is below this value
@@ -46,6 +54,7 @@ Options:
 
 const KS = [1, 3, 5, 10] as const;
 const SWEEP_EF_SEARCH = [40, 100, 200, 400, 1000];
+const SWEEP_FLOORS = [0, 0.5, 0.52, 0.54, 0.56, 0.57, 0.58, 0.6, 0.62, 0.65];
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`.padStart(4);
 
@@ -73,7 +82,7 @@ async function embeddedRegulations(db: Database, model: string, ids: number[]) {
 }
 
 type Run = {
-  report: EvalReport;
+  /** What the search found for each question, before any similarity floor. */
   retrieved: Map<string, SearchHit[]>;
   /** Average time of the database search, without the embedding of the question. */
   msPerQuestion: number;
@@ -88,6 +97,8 @@ async function main() {
       exact: { type: "boolean", default: false },
       sweep: { type: "boolean", default: false },
       "semantic-only": { type: "boolean", default: false },
+      "min-similarity": { type: "string" },
+      floors: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -117,6 +128,16 @@ async function main() {
     );
   }
 
+  const minSimilarity =
+    values["min-similarity"] === undefined
+      ? DEFAULT_MIN_SIMILARITY
+      : Number(values["min-similarity"]);
+  if (!(minSimilarity >= 0 && minSimilarity <= 1)) {
+    throw new Error(
+      `--min-similarity must be between 0 and 1, got "${values["min-similarity"]}"`,
+    );
+  }
+
   const sql = postgres(getEnv().DATABASE_URL, { max: 1 });
 
   try {
@@ -126,12 +147,13 @@ async function main() {
     const available = await embeddedRegulations(db, embedder.model, [
       ...new Set(GOLD_QUESTIONS.flatMap((question) => question.expected)),
     ]);
-    const questions = GOLD_QUESTIONS.filter((question) =>
-      question.expected.some((id) => available.has(id)),
+    const questions = GOLD_QUESTIONS.filter(
+      (question) =>
+        isAbsent(question) || question.expected.some((id) => available.has(id)),
     );
     const skipped = GOLD_QUESTIONS.length - questions.length;
 
-    if (questions.length === 0) {
+    if (questions.every(isAbsent)) {
       throw new Error(
         "None of the expected regulations has embedded chunks. Run `npm run ingest`, `npm run texts` and `npm run embed` first.",
       );
@@ -144,34 +166,40 @@ async function main() {
     // The sweep measures the index, so it leaves the lookup by number out.
     const semanticOnly = values["semantic-only"] || values.sweep;
 
+    // The search runs once per question, without a similarity floor. Floors are
+    // then applied to what came back, so several can be compared on one run.
     const run = async (options: SearchOptions): Promise<Run> => {
       const retrieved = new Map<string, SearchHit[]>();
       let elapsed = 0;
 
-      const report = await evaluate(
-        questions,
-        async (question) => {
-          const startedAt = performance.now();
-          const hits = await searchByVector(
-            db,
-            embedder.model,
-            vectors.get(question)!,
-            {
-              limit: MAX_SEARCH_LIMIT,
-              references: semanticOnly ? [] : findReferences(question),
-              ...options,
-            },
-          );
-          elapsed += performance.now() - startedAt;
+      for (const { question } of questions) {
+        const startedAt = performance.now();
+        const hits = await searchByVector(db, embedder.model, vectors.get(question)!, {
+          limit: MAX_SEARCH_LIMIT,
+          references: semanticOnly ? [] : findReferences(question),
+          minSimilarity: 0,
+          ...options,
+        });
+        elapsed += performance.now() - startedAt;
 
-          retrieved.set(question, hits);
-          return hits.map((hit) => hit.regulation.id);
-        },
+        retrieved.set(question, hits);
+      }
+
+      return { retrieved, msPerQuestion: elapsed / questions.length };
+    };
+
+    const score = (retrieved: Map<string, SearchHit[]>, floor: number) =>
+      evaluate(
+        questions,
+        async (question) =>
+          (retrieved.get(question) ?? [])
+            .filter((hit) => isCloseEnough(hit, floor))
+            .map((hit) => hit.regulation.id),
         KS,
       );
 
-      return { report, retrieved, msPerQuestion: elapsed / questions.length };
-    };
+    const rejectedColumn = (report: EvalReport) =>
+      `rejected ${report.rejection.rejected}/${report.rejection.questions}`;
 
     if (values.sweep) {
       const settings: { name: string; options: SearchOptions }[] = [
@@ -186,7 +214,9 @@ async function main() {
       for (const setting of settings) {
         // The first pass loads the data into memory; the second one is timed.
         await run(setting.options);
-        const { report, msPerQuestion } = await run(setting.options);
+        const { retrieved, msPerQuestion } = await run(setting.options);
+        // The index is measured on its own: no floor.
+        const report = await score(retrieved, 0);
         rows.push({ name: setting.name, metrics: report.overall, msPerQuestion });
       }
 
@@ -195,7 +225,9 @@ async function main() {
           JSON.stringify({ model: embedder.model, skipped, sweep: rows }, null, 2),
         );
       } else {
-        console.log(`Model: ${embedder.model} · ${questions.length} questions\n`);
+        console.log(
+          `Model: ${embedder.model} · ${rows[0]?.metrics.questions ?? 0} questions\n`,
+        );
         for (const row of rows) {
           console.log(
             `${row.name.padEnd(15)} ${metricsColumns(row.metrics)}  ${row.msPerQuestion.toFixed(0).padStart(5)} ms/question`,
@@ -208,15 +240,45 @@ async function main() {
       return;
     }
 
-    const { report, retrieved, msPerQuestion } = await run({
-      exact: values.exact,
-      efSearch,
-    });
+    // The first pass loads the data into memory; the second one is timed.
+    await run({ exact: values.exact, efSearch });
+    const { retrieved, msPerQuestion } = await run({ exact: values.exact, efSearch });
+
+    if (values.floors) {
+      const rows = [];
+      for (const floor of SWEEP_FLOORS) {
+        const report = await score(retrieved, floor);
+        rows.push({ floor, metrics: report.overall, rejection: report.rejection });
+      }
+
+      if (values.json) {
+        console.log(
+          JSON.stringify({ model: embedder.model, skipped, floors: rows }, null, 2),
+        );
+      } else {
+        const [first] = rows;
+        console.log(
+          `Model: ${embedder.model} · ${first?.metrics.questions ?? 0} questions with an answer, ${first?.rejection.questions ?? 0} without\n`,
+        );
+        for (const row of rows) {
+          const mark = row.floor === DEFAULT_MIN_SIMILARITY ? "  <- default" : "";
+          console.log(
+            `min ${row.floor.toFixed(2)}   ${metricsColumns(row.metrics)}   rejected ${row.rejection.rejected}/${row.rejection.questions}${mark}`,
+          );
+        }
+        console.log(
+          "\nA good floor keeps recall where it is and rejects every question without an answer.",
+        );
+      }
+      return;
+    }
+
+    const report = await score(retrieved, minSimilarity);
 
     if (values.json) {
       console.log(
         JSON.stringify(
-          { model: embedder.model, skipped, msPerQuestion, ...report },
+          { model: embedder.model, skipped, minSimilarity, msPerQuestion, ...report },
           null,
           2,
         ),
@@ -226,24 +288,42 @@ async function main() {
         ? "exact search"
         : `ef_search ${efSearch ?? DEFAULT_EF_SEARCH}`;
       const scope = semanticOnly ? "semantic only" : "with lookup by number";
-      console.log(`Model: ${embedder.model} (${mode}, ${scope})\n`);
-      console.log("rank  kind       question");
+      console.log(
+        `Model: ${embedder.model} (${mode}, ${scope}, min similarity ${minSimilarity})\n`,
+      );
+      console.log("rank   top    hit   kind       question");
       for (const result of report.results) {
-        const rank = result.rank === null ? "  —" : String(result.rank).padStart(3);
-        console.log(`${rank}   ${result.kind.padEnd(10)} ${result.question}`);
+        const hits = retrieved.get(result.question) ?? [];
+        const expectedHit = hits.find((hit) =>
+          result.expected.includes(hit.regulation.id),
+        );
+        const similarity = (hit: SearchHit | undefined) =>
+          hit ? hit.similarity.toFixed(3) : "  —  ";
 
-        if (values.verbose && result.rank !== 1) {
-          for (const [index, hit] of (retrieved.get(result.question) ?? [])
-            .slice(0, 5)
-            .entries()) {
+        const outcome = isAbsent(result)
+          ? result.returned === 0
+            ? " ok"
+            : `+${result.returned}`.padStart(3)
+          : result.rank === null
+            ? "  —"
+            : String(result.rank).padStart(3);
+
+        console.log(
+          `${outcome}   ${similarity(hits[0])}  ${similarity(expectedHit)}  ${result.kind.padEnd(10)} ${result.question}`,
+        );
+
+        const wrong = isAbsent(result) ? result.returned > 0 : result.rank !== 1;
+        if (values.verbose && wrong) {
+          for (const [index, hit] of hits.slice(0, 5).entries()) {
             const expected = result.expected.includes(hit.regulation.id) ? "*" : " ";
             const cited = hit.match === "reference" ? " [cited]" : "";
+            const dropped = isCloseEnough(hit, minSimilarity) ? "" : " [too far]";
             const where = [hit.regulation.name, hit.label].filter(Boolean).join(" · ");
             const title = [hit.regulation.topic, hit.regulation.title]
               .filter(Boolean)
               .join(" / ");
             console.log(
-              `       ${expected}${index + 1}. ${hit.similarity.toFixed(3)}  ${where}${cited} — ${title.slice(0, 90)}`,
+              `       ${expected}${index + 1}. ${hit.similarity.toFixed(3)}  ${where}${cited}${dropped} — ${title.slice(0, 90)}`,
             );
           }
         }
@@ -254,19 +334,30 @@ async function main() {
       for (const [kind, metrics] of Object.entries(report.byKind)) {
         console.log(metricsLine(kind, metrics));
       }
+      if (report.rejection.questions > 0) {
+        console.log(
+          `${"absent".padEnd(10)} ${String(report.rejection.questions).padStart(3)}  ${rejectedColumn(report)}`,
+        );
+      }
       console.log(`\nSearch time: ${msPerQuestion.toFixed(0)} ms per question.`);
 
+      console.log(
+        "\ntop: similarity of the nearest chunk. hit: similarity of the first chunk of the expected regulation.",
+      );
+      console.log(
+        'Questions of kind "absent" have no answer in the corpus: "ok" means nothing came back, "+N" that N chunks did.',
+      );
       if (values.verbose) {
-        console.log("\n* marks a chunk of the expected regulation.");
+        console.log("* marks a chunk of the expected regulation.");
       }
       if (skipped > 0) {
         console.log(
           `\n${skipped} question(s) skipped: their regulation has no embedded chunks yet.`,
         );
       }
-      if (report.results.some((result) => result.rank === null)) {
+      if (report.results.some((result) => !isAbsent(result) && result.rank === null)) {
         console.log(
-          `\n"—" means the regulation was not among the first ${MAX_SEARCH_LIMIT} chunks.`,
+          `\n"—" means the regulation was not among the first ${MAX_SEARCH_LIMIT} chunks, or was too far.`,
         );
       }
     }

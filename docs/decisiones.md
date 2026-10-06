@@ -273,6 +273,31 @@ garantizar con un test.
   residentes?" puede necesitar otra norma).
 - Los filtros de tipo y año se aplican también a la norma citada.
 
+## 28. Piso de similitud: la búsqueda puede responder "no hay nada"
+
+**Decisión**: un fragmento encontrado por significado se devuelve solo si su
+similitud con la pregunta alcanza un mínimo (`minSimilarity`, por defecto
+0,57). Si ninguno lo alcanza, el resultado es una lista vacía y el comando lo
+dice, con la similitud del fragmento más cercano. Las normas citadas por número
+no pasan por el piso: fueron pedidas por su nombre.
+**Motivo**: una búsqueda por similitud siempre tiene un "más cercano", por lejos
+que esté. Ante "normativas relacionadas con mascotas", sin normas sobre el tema
+en el corpus, devolvía decretos sobre zoonosis y ganado con similitudes de 0,52
+a 0,56. Para una herramienta legal, mostrar normas que no tienen relación es
+peor que decir que no se encontró nada.
+**Medición**: con 0,57 se conservan todas las respuestas correctas de la
+evaluación y se rechazan las cinco preguntas sin respuesta. El margen es
+angosto: el fragmento correcto más bajo tuvo 0,590 y la pregunta sin respuesta
+más alta, 0,561.
+**Cómo se elige el valor**: la evaluación incluye preguntas sobre temas que el
+corpus no cubre, que deben volver vacías. `npm run eval -- --floors` muestra,
+para varios pisos, cuántas respuestas correctas se conservan y cuántas de esas
+preguntas se rechazan. El piso se aplica después de la consulta, sobre los
+resultados, para poder comparar varios valores con una sola corrida.
+**Limitación**: la similitud coseno no es una medida calibrada de relevancia. Un
+piso fijo separa los casos claros; para los dudosos hace falta un segundo
+juicio, que es el del modelo de lenguaje en la etapa 5.
+
 ---
 
 ## Desarrollo asistido por IA

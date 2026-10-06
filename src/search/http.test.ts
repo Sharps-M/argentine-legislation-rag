@@ -47,16 +47,28 @@ describe("searchResponse", () => {
     expect(await response.json()).toEqual({
       query: "seguridad social",
       model: "bge-m3",
+      minSimilarity: 0.57,
       results: [hit],
     });
     expect(calls).toEqual([["seguridad social", { limit: 3, types: ["Ley"] }]]);
   });
 
-  it("answers 200 with an empty list when nothing matches", async () => {
-    const response = await searchResponse(params("q=nada"), async () => [], "bge-m3");
+  it("answers 200 with an empty list when nothing is close enough", async () => {
+    const calls: SearchOptions[] = [];
+    const search: SearchFn = async (_query, options) => {
+      calls.push(options);
+      return [];
+    };
+
+    const response = await searchResponse(
+      params("q=mascotas&min_similarity=0.6"),
+      search,
+      "bge-m3",
+    );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ results: [] });
+    expect(await response.json()).toMatchObject({ minSimilarity: 0.6, results: [] });
+    expect(calls).toEqual([{ limit: 8, minSimilarity: 0.6 }]);
   });
 
   it("answers 400 and does not search when the request is invalid", async () => {

@@ -12,9 +12,13 @@ describe("gold questions", () => {
     expect(new Set(questions).size).toBe(questions.length);
   });
 
-  it("each point to at least one regulation", () => {
+  it("each point to at least one regulation, unless the subject is absent", () => {
     for (const item of GOLD_QUESTIONS) {
-      expect(item.expected.length, item.question).toBeGreaterThan(0);
+      if (item.kind === "absent") {
+        expect(item.expected, item.question).toEqual([]);
+      } else {
+        expect(item.expected.length, item.question).toBeGreaterThan(0);
+      }
     }
   });
 
@@ -28,7 +32,7 @@ describe("gold questions", () => {
 
   it("cover every kind of question", () => {
     expect(new Set(GOLD_QUESTIONS.map((item) => item.kind))).toEqual(
-      new Set(["topic", "reference", "english"]),
+      new Set(["topic", "reference", "english", "absent"]),
     );
   });
 });

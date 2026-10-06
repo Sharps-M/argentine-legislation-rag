@@ -71,6 +71,8 @@ describe("evaluate", () => {
     );
 
     expect(report.results.map((result) => result.rank)).toEqual([1, 3, 2, null]);
+    expect(report.results.map((result) => result.returned)).toEqual([3, 3, 3, 3]);
+    expect(report.rejection).toEqual({ questions: 0, rejected: 0 });
     expect(report.overall).toEqual({
       questions: 4,
       recall: { 1: 0.25, 3: 0.75 },
@@ -86,6 +88,25 @@ describe("evaluate", () => {
       recall: { 1: 0, 3: 0.5 },
       mrr: 0.25,
     });
+  });
+
+  it("scores questions without an answer by whether nothing came back", async () => {
+    const report = await evaluate(
+      [
+        ...questions,
+        { question: "mascotas", kind: "absent", expected: [] },
+        { question: "ajedrez", kind: "absent", expected: [] },
+      ],
+      async (question) =>
+        question === "ajedrez" ? [] : (retrieved[question] ?? [7, 8]),
+      [1, 3],
+    );
+
+    expect(report.rejection).toEqual({ questions: 2, rejected: 1 });
+    // They do not count towards recall or MRR.
+    expect(report.overall.questions).toBe(4);
+    expect(report.overall.recall).toEqual({ 1: 0.25, 3: 0.75 });
+    expect(report.byKind.absent).toBeUndefined();
   });
 
   it("asks the questions one at a time, in order", async () => {

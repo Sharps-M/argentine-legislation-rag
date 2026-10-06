@@ -6,12 +6,14 @@ import { getEmbedder } from "../ai/embedder";
 import { createDb } from "../db/client";
 import { getEnv } from "../env";
 import { parseSearchParams } from "./params";
-import { QueryEmbeddingError, searchChunks } from "./search";
+import { DEFAULT_MIN_SIMILARITY, QueryEmbeddingError, searchChunks } from "./search";
 
 const HELP = `
 Usage: npm run search -- "<question>" [options]
 
-Prints the chunks closest in meaning to the question, best first.
+Prints the chunks that answer the question, best first: those of a regulation
+cited by number, and those close enough in meaning. When nothing is close
+enough it says so instead of showing unrelated regulations.
 Requires the embeddings to be generated first (npm run embed).
 
 Options:
@@ -19,6 +21,9 @@ Options:
   --type <type>   Keep only this regulation type; repeat for several (Ley, Decreto)
   --from <year>   Keep regulations enacted in this year or later
   --to <year>     Keep regulations enacted in this year or earlier
+  --min-similarity <0-1>
+                  How close a chunk must be to count (default: ${DEFAULT_MIN_SIMILARITY});
+                  0 shows the nearest chunks however far they are
   --json          Print the results as JSON
   --help          Show this message
 
@@ -40,6 +45,7 @@ async function main() {
       type: { type: "string", multiple: true },
       from: { type: "string" },
       to: { type: "string" },
+      "min-similarity": { type: "string" },
       json: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -55,6 +61,7 @@ async function main() {
   if (values.limit) params.set("limit", values.limit);
   if (values.from) params.set("from", values.from);
   if (values.to) params.set("to", values.to);
+  if (values["min-similarity"]) params.set("min_similarity", values["min-similarity"]);
   for (const type of values.type ?? []) params.append("type", type);
 
   const request = parseSearchParams(params);
@@ -68,12 +75,9 @@ async function main() {
   const sql = postgres(getEnv().DATABASE_URL, { max: 1 });
 
   try {
-    const hits = await searchChunks(
-      createDb(sql),
-      getEmbedder(),
-      request.query,
-      request.options,
-    );
+    const db = createDb(sql);
+    const embedder = getEmbedder();
+    const hits = await searchChunks(db, embedder, request.query, request.options);
 
     if (values.json) {
       console.log(JSON.stringify(hits, null, 2));
@@ -81,7 +85,18 @@ async function main() {
     }
 
     if (hits.length === 0) {
-      console.log("No results. Have the embeddings been generated? (npm run embed)");
+      const required = request.options.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+      const [nearest] = await searchChunks(db, embedder, request.query, {
+        ...request.options,
+        limit: 1,
+        minSimilarity: 0,
+      });
+
+      console.log(
+        nearest
+          ? `No regulation is close enough to the question: the nearest chunk scores ${nearest.similarity.toFixed(3)} (${nearest.regulation.name}) and ${required} is required.\nUse --min-similarity 0 to see the nearest ones anyway.`
+          : "No results. Have the embeddings been generated? (npm run embed)",
+      );
       return;
     }
 

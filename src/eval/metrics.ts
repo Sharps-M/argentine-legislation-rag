@@ -29,7 +29,20 @@ export function meanReciprocalRank(ranks: readonly (number | null)[]): number {
   );
 }
 
-export type QuestionResult = GoldQuestion & { rank: number | null };
+export type QuestionResult = GoldQuestion & {
+  rank: number | null;
+  /** How many chunks the search returned. */
+  returned: number;
+};
+
+/**
+ * How questions about subjects the corpus does not cover were handled: the
+ * right outcome is an empty result, not the least unrelated regulations.
+ */
+export type Rejection = { questions: number; rejected: number };
+
+/** A question is `absent` when no regulation is expected to answer it. */
+export const isAbsent = (question: GoldQuestion) => question.expected.length === 0;
 
 export type Metrics = {
   questions: number;
@@ -40,8 +53,11 @@ export type Metrics = {
 
 export type EvalReport = {
   results: QuestionResult[];
+  /** Questions that have an answer in the corpus. */
   overall: Metrics;
   byKind: Partial<Record<QuestionKind, Metrics>>;
+  /** Questions that have none. */
+  rejection: Rejection;
 };
 
 const metricsFor = (results: QuestionResult[], ks: readonly number[]): Metrics => {
@@ -57,6 +73,10 @@ const metricsFor = (results: QuestionResult[], ks: readonly number[]): Metrics =
 /**
  * Runs every question through `retrieve` (which returns the regulation id of
  * each retrieved chunk, best first) and scores the outcome.
+ *
+ * Questions with an expected regulation count towards recall and MRR. Questions
+ * without one count towards the rejection rate: they pass when nothing comes
+ * back.
  */
 export async function evaluate(
   questions: readonly GoldQuestion[],
@@ -71,22 +91,29 @@ export async function evaluate(
     results.push({
       ...question,
       rank: firstRelevantRank(retrieved, question.expected),
+      returned: retrieved.length,
     });
   }
 
-  const kinds = [...new Set(results.map((result) => result.kind))];
+  const answerable = results.filter((result) => !isAbsent(result));
+  const absent = results.filter(isAbsent);
+  const kinds = [...new Set(answerable.map((result) => result.kind))];
 
   return {
     results,
-    overall: metricsFor(results, ks),
+    overall: metricsFor(answerable, ks),
     byKind: Object.fromEntries(
       kinds.map((kind) => [
         kind,
         metricsFor(
-          results.filter((result) => result.kind === kind),
+          answerable.filter((result) => result.kind === kind),
           ks,
         ),
       ]),
     ),
+    rejection: {
+      questions: absent.length,
+      rejected: absent.filter((result) => result.returned === 0).length,
+    },
   };
 }

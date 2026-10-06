@@ -161,3 +161,77 @@ Dos consecuencias:
 
 Con la búsqueda por número y `ef_search = 100`, lo que falta son las normas que
 se repiten casi iguales: las dos preguntas que ni la búsqueda exacta resuelve.
+
+## Preguntas sin respuesta en el corpus — 4 de octubre de 2026
+
+Dos búsquedas sobre temas que el corpus no cubre (lo que regula mascotas es
+anterior al recorte de cinco años, o está en resoluciones):
+
+| Pregunta                             | Qué devolvió                                               | Similitud     |
+| ------------------------------------ | ---------------------------------------------------------- | ------------- |
+| normativas relacionadas con mascotas | Decretos sobre zoonosis, ganado, fauna y "marco normativo" | 0,520 a 0,558 |
+| castrar perros                       | Un artículo sobre animales sueltos en la vía pública       | 0,469         |
+
+El modelo fue en la dirección correcta (animales), pero la búsqueda mostraba 20
+resultados como si fueran respuestas. Dos de ellos aparecían por la palabra
+"normativas" y no por "mascotas".
+
+En las mediciones anteriores, el primer fragmento de la norma correcta tuvo
+entre 0,59 y 0,82 de similitud. Con esos pocos datos se fijó un piso
+**provisional de 0,57** (decisión 28) y se sumaron a la evaluación cinco
+preguntas sin respuesta, que deben volver vacías.
+
+Falta confirmarlo: `npm run eval` muestra ahora la similitud del fragmento más
+cercano y la del primer fragmento esperado en cada pregunta, y
+`npm run eval -- --floors` compara varios pisos. No se conoce todavía la
+similitud de las respuestas correctas a las preguntas en inglés; si queda por
+debajo de 0,57, el piso hay que bajarlo o tratarlas aparte.
+
+## Piso de similitud — 6 de octubre de 2026
+
+`npm run eval` y `npm run eval -- --floors` sobre 23 preguntas: las 18 con
+respuesta y cinco sobre temas que el corpus no cubre, que deben volver vacías.
+
+| Piso        | R@1  | R@5  | MRR   | Preguntas sin respuesta rechazadas |
+| ----------- | ---- | ---- | ----- | ---------------------------------- |
+| Sin piso    | 61 % | 89 % | 0,728 | 0 de 5                             |
+| 0,50 a 0,56 | 61 % | 89 % | 0,728 | 4 de 5                             |
+| **0,57**    | 61 % | 89 % | 0,728 | **5 de 5**                         |
+| 0,58        | 61 % | 89 % | 0,728 | 5 de 5                             |
+| 0,60        | 56 % | 78 % | 0,645 | 5 de 5                             |
+| 0,62        | 44 % | 67 % | 0,534 | 5 de 5                             |
+| 0,65        | 39 % | 50 % | 0,439 | 5 de 5                             |
+
+**Decisión: se confirma 0,57.** Conserva todas las respuestas correctas y
+rechaza las cinco preguntas sin respuesta.
+
+### El margen es angosto
+
+| Qué                                                                      | Similitud     |
+| ------------------------------------------------------------------------ | ------------- |
+| Respuesta correcta más baja (convenio con San Marino)                    | 0,598         |
+| Primer fragmento esperado más bajo (Belgrano Cargas, segundo puesto)     | 0,590         |
+| Pregunta sin respuesta más alta ("normativas relacionadas con mascotas") | 0,561         |
+| Resto de las preguntas sin respuesta                                     | 0,385 a 0,477 |
+
+La ventana que funciona va de 0,562 a 0,589: menos de tres centésimas. Con 0,56
+pasa la pregunta de mascotas; con 0,60 se pierden dos respuestas correctas. El
+piso separa bien lo que no tiene ninguna relación (ajedrez, empanadas: 0,39 a
+0,48) y apenas lo que es vecino del tema (mascotas frente a zoonosis y ganado).
+
+Lo que se concluye:
+
+- Un piso fijo alcanza para estas 23 preguntas, pero no es una garantía. Hay que
+  volver a correr `--floors` cuando cambie el corpus o el modelo.
+- Para los casos vecinos, el segundo filtro es el modelo de lenguaje de la etapa
+  5, que lee los fragmentos y decide si respaldan una respuesta.
+- Las dos preguntas en inglés tuvieron 0,641 y 0,604: el piso no las afecta.
+
+### Tiempo de búsqueda
+
+La corrida normal informó 134 ms por pregunta, contra los 5 ms del barrido con
+el mismo `ef_search`. La explicación más probable es la caché fría: fue la
+primera corrida después de reiniciar el equipo, y el barrido hacía una pasada de
+calentamiento que la corrida normal no hacía. No está confirmado. Desde ahora
+las dos hacen esa pasada; si el tiempo sigue alto, hay que mirar el plan de la
+consulta.
