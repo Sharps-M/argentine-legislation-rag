@@ -211,7 +211,16 @@ export async function processTexts(
       continue;
     }
 
-    await store.save(regulation.id, text, chunks);
+    // One text the database rejects must not end a run of hours: it is counted
+    // as a failure and the run goes on.
+    try {
+      await store.save(regulation.id, text, chunks);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      fail(regulation.id, `could not save: ${reason.slice(0, 120)}`);
+      continue;
+    }
+
     report.saved += 1;
     report.chunks += chunks.length;
   }

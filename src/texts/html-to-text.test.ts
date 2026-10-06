@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { decodeHtml, htmlToText } from "./html-to-text";
+import { decodeHtml, htmlToText, normalizeText } from "./html-to-text";
 
 const fixtureDir = path.join("tests", "fixtures", "html");
 const fixtures = readdirSync(fixtureDir).filter((file) => file.endsWith(".htm"));
@@ -56,6 +56,33 @@ describe("htmlToText", () => {
     expect(text).not.toMatch(/�|Ã|\n{3,}/);
     expect(text).toMatch(/^[A-ZÁÉÍÓÚÑ]/);
     expect(text).toMatch(/(Ley|Decreto) \d+/);
+  });
+});
+
+describe("normalizeText", () => {
+  it("drops control characters and unknown-character marks", () => {
+    expect(
+      normalizeText("\u0004\u0010 Ley N\u00ba 24.089\b\ufffd\u0085 aprobada"),
+    ).toBe("Ley N\u00ba 24.089 aprobada");
+  });
+
+  it("keeps line breaks and tabs as spacing", () => {
+    expect(normalizeText("uno\r\n\tdos")).toBe("uno\ndos");
+  });
+
+  it("shortens rows of filler characters", () => {
+    expect(normalizeText(`Reactividad con el agua: ${".".repeat(300)} 5`)).toBe(
+      "Reactividad con el agua: ... 5",
+    );
+    expect(normalizeText(`Firma: ${"_".repeat(40)}`)).toBe("Firma: ___");
+    expect(normalizeText(". . . . . . . . fin")).toBe("... fin");
+  });
+
+  it("leaves ordinary punctuation alone", () => {
+    expect(normalizeText("Ver arts. 1 a 3... y el inciso a) -- nota --")).toBe(
+      "Ver arts. 1 a 3... y el inciso a) -- nota --",
+    );
+    expect(normalizeText("Ley 27.742 - art. 3.1.2")).toBe("Ley 27.742 - art. 3.1.2");
   });
 });
 

@@ -88,6 +88,16 @@ The report lists how many rows were read, rejected (with the reason and line of
 the first ones) and loaded, broken down by type and year. Run
 `npm run ingest -- --help` for every option.
 
+Recent is not the same as in force: a law from 1954 can still apply. The corpus
+behind the measurements below adds every law and decree-law in the dataset,
+whatever its date, to the default subset:
+
+```bash
+npm run ingest -- --file data/infoleg/base-infoleg-normativa-nacional.zip --types "Ley,Decreto/Ley" --all-dates
+```
+
+Loads add to what is already there, so subsets can be combined.
+
 ### Full text and chunks
 
 ```bash
@@ -140,7 +150,7 @@ GET /api/search?q=impuesto a los combustibles&type=Decreto&from=2026&limit=5
 | `limit`          | Chunks to return, 1 to 20 (default 8)                     |
 | `type`           | Regulation type; repeat or separate with commas           |
 | `from`, `to`     | Range of enactment years                                  |
-| `min_similarity` | How close a chunk must be to count, 0 to 1 (default 0.57) |
+| `min_similarity` | How close a chunk must be to count, 0 to 1 (default 0.55) |
 
 It answers `200` with the chunks ordered by similarity, each with its
 regulation and a link to the official text; `400` with the list of problems when
@@ -166,7 +176,7 @@ minimum similarity, or it is left out. A similarity search always has a
 "nearest" chunk, however far; asked about pets, it used to answer with
 regulations on zoonoses and livestock. Now, when nothing is close enough, the
 answer is an empty list and the command says so. A regulation cited by number
-is never left out. The minimum, 0.57, was chosen by measuring: it keeps every
+is never left out. The minimum, 0.55, was chosen by measuring: it keeps every
 right answer of the evaluation and rejects its five questions about subjects
 the corpus does not cover.
 
@@ -189,20 +199,25 @@ minimum similarities: answers kept against unrelated results rejected. The set
 includes questions about subjects the corpus does not cover, which must come
 back empty.
 
-Measured on the full corpus (5,069 regulations, 41,275 chunks), 18 questions,
-similarity search alone:
+Measured on the full corpus (34,973 regulations, some 210,000 chunks), 22
+questions with a known answer, similarity search alone:
 
 | Search                         | recall@1 | recall@5 | MRR  | Time per query |
 | ------------------------------ | -------- | -------- | ---- | -------------- |
-| Exact scan (no index)          | 61%      | 89%      | 0.73 | 133 ms         |
-| HNSW index, pgvector's default | 44%      | 72%      | 0.56 | 4 ms           |
-| HNSW index, `ef_search = 100`  | 61%      | 89%      | 0.73 | 5 ms           |
+| Exact scan (no index)          | 55%      | 86%      | 0.69 | 682 ms         |
+| HNSW index, pgvector's default | 45%      | 77%      | 0.60 | 5 ms           |
+| HNSW index, `ef_search = 100`  | 55%      | 86%      | 0.69 | 7 ms           |
 
 With its default settings the approximate index was skipping answers the model
 does find; at `ef_search = 100` it returns the same results as the exact scan,
-about 25 times faster. That is the value the search uses. What even the exact scan
-still misses are decrees reissued every few months with near-identical
-articles. Every measurement and what it led to is logged (in Spanish) in
+about a hundred times faster. That is the value the search uses. Five more
+questions, about subjects the corpus does not cover, all come back empty.
+
+The same measurements were taken on a corpus a fifth of this size. The index
+setting held; the minimum similarity did not, and had to come down from 0.57 to
+0.55. What the search still gets wrong are decrees reissued every few months
+with near-identical articles, and very broad questions. Every measurement and
+what it led to is logged (in Spanish) in
 [`docs/evaluacion.md`](docs/evaluacion.md).
 
 ## Scripts

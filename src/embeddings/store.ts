@@ -1,4 +1,4 @@
-import { asc, count, eq, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gt, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/client";
 import { chunks, regulations } from "@/db/schema";
@@ -11,7 +11,7 @@ const isPending = (model: string) =>
 
 export function createEmbeddingStore(db: Database): EmbeddingStore {
   return {
-    pending(model, limit) {
+    pending(model, limit, afterId) {
       return db
         .select({
           id: chunks.id,
@@ -25,7 +25,7 @@ export function createEmbeddingStore(db: Database): EmbeddingStore {
         })
         .from(chunks)
         .innerJoin(regulations, eq(regulations.id, chunks.regulationId))
-        .where(isPending(model))
+        .where(and(isPending(model), gt(chunks.id, afterId)))
         .orderBy(asc(chunks.id))
         .limit(limit);
     },

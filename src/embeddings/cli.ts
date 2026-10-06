@@ -5,6 +5,7 @@ import postgres from "postgres";
 import { getEmbedder } from "../ai/embedder";
 import { createDb } from "../db/client";
 import { getEnv } from "../env";
+import { regulationName } from "./input";
 import { embedChunks } from "./pipeline";
 import { createEmbeddingStore, resetEmbeddings, vacuumChunks } from "./store";
 
@@ -18,6 +19,9 @@ Requires Ollama running with the model pulled:  ollama pull bge-m3
 
 Each batch is saved as soon as it is embedded, so the command can be stopped
 and resumed at any time.
+
+A text the model cannot handle is set aside and listed at the end; the run goes
+on with the rest.
 
 Options:
   --limit <n>    Embed at most n chunks (useful for a first trial)
@@ -97,6 +101,21 @@ async function main() {
         ? "\nNothing to embed: every chunk already has a vector from this model."
         : `\nEmbedded ${report.embedded} chunks in ${report.batches} batches (${seconds}s).`,
     );
+
+    if (report.skipped.length > 0) {
+      console.log(
+        `\n${report.skipped.length} chunk(s) could not be embedded and stay pending:`,
+      );
+      for (const { chunk, reason } of report.skipped.slice(0, 20)) {
+        const where = [regulationName(chunk), chunk.label].filter(Boolean).join(" · ");
+        const preview = JSON.stringify(chunk.content.slice(0, 70));
+        console.log(
+          `  chunk ${chunk.id}  ${where}  (${chunk.content.length} chars)  ${preview}`,
+        );
+        console.log(`    ${reason.slice(0, 160)}`);
+      }
+      process.exitCode = 1;
+    }
   } finally {
     await sql.end();
   }

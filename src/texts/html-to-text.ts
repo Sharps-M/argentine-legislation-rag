@@ -75,14 +75,29 @@ export function htmlToText(html: string): string {
   return normalizeText(output);
 }
 
-/** Trims lines, collapses spaces and reduces runs of blank lines to one. */
+// Control characters and the "unknown character" mark: some pages carry
+// stretches of binary junk, which mean nothing and can crash a tokenizer.
+const JUNK = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\ufffd]/g;
+
+// Rows of filler ("......", "______", ". . . . .") from forms and tables of
+// contents. A whole chunk of dots says nothing; three keep the visual cue.
+const FILLER = /([._\-=*~])\1{4,}/g;
+const SPACED_DOTS = /(?:\. ){4,}\.?/g;
+
+/**
+ * Trims lines, collapses spaces, drops junk characters, shortens filler rows
+ * and reduces runs of blank lines to one.
+ */
 export function normalizeText(text: string): string {
   return text
     .replace(/ /g, " ")
+    .replace(JUNK, "")
     .split("\n")
     .map((line) =>
       line
         .replace(/[ \t]+/g, " ")
+        .replace(FILLER, "$1$1$1")
+        .replace(SPACED_DOTS, "... ")
         .replace(/^(\s*\|\s*)+/, "")
         .trim(),
     )

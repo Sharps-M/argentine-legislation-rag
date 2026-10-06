@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { GOLD_QUESTIONS } from "./questions";
+import { GOLD_QUESTIONS, READ_ONLINE } from "./questions";
 
 describe("gold questions", () => {
   it("are not repeated", () => {
@@ -22,11 +22,11 @@ describe("gold questions", () => {
     }
   });
 
-  it("only point to regulations whose text is kept as a fixture", () => {
+  it("only point to regulations kept as fixtures or listed as read online", () => {
     for (const id of new Set(GOLD_QUESTIONS.flatMap((item) => item.expected))) {
       const fixture = path.join("tests", "fixtures", "html", `${id}.htm`);
 
-      expect(existsSync(fixture), fixture).toBe(true);
+      expect(existsSync(fixture) || id in READ_ONLINE, `regulation ${id}`).toBe(true);
     }
   });
 

@@ -15,11 +15,22 @@ export type GoldQuestion = {
 };
 
 /**
+ * Regulations the questions point to that are not kept as test fixtures. Each
+ * was read on InfoLEG before its question was written, on 2026-10-06.
+ */
+export const READ_ONLINE: Record<number, string> = {
+  153011: "Ley 14346",
+  184650: "Ley 22953",
+  268503: "Ley 27330",
+};
+
+/**
  * Questions with a known answer, used to measure the retrieval.
  *
- * Each one was written by reading the regulation it points to. They cover the
- * nine regulations kept as test fixtures (`tests/fixtures/html/`), so every
- * expected answer can be checked against a file in the repository.
+ * Each one was written by reading the regulation it points to. Most cover the
+ * nine regulations kept as test fixtures (`tests/fixtures/html/`), so their
+ * expected answer can be checked against a file in the repository; the others
+ * are listed in `READ_ONLINE`.
  */
 export const GOLD_QUESTIONS: GoldQuestion[] = [
   // Ley 27817: social security agreement with San Marino.
@@ -140,18 +151,47 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
     expected: [429385],
   },
 
-  // Subjects without a regulation in the corpus (laws and decrees of the last
-  // five years). The first two were checked against it on 2026-10-04: the
-  // nearest chunks were about zoonoses and loose livestock. Dog racing was
-  // banned by a law from 2016, outside the subset. The last two are not legal
-  // subjects at all.
-  { question: "Normativas relacionadas con mascotas", kind: "absent", expected: [] },
+  // Animal laws, older than any of the fixtures. They entered the corpus when
+  // it was extended to every law (docs/decisiones.md, 29).
+  // Ley 14346 (1954): penalties for mistreating animals.
+  {
+    question: "¿Qué pena tiene el maltrato o la crueldad contra los animales?",
+    kind: "topic",
+    expected: [153011],
+  },
+  // Ley 27330 (2016): dog racing banned.
+  {
+    question: "Prohibición de las carreras de galgos",
+    kind: "topic",
+    expected: [268503],
+  },
+  // Ley 22953 (1983): rabies control.
+  {
+    question: "Vacunación antirrábica obligatoria de perros y gatos",
+    kind: "topic",
+    expected: [184650],
+  },
+  // A broad question: any of the three is a right answer.
+  {
+    question: "Normativas relacionadas con mascotas",
+    kind: "topic",
+    expected: [153011, 268503, 184650],
+  },
+
+  // Subjects without a regulation in the corpus. Neutering is regulated by a
+  // decree from 2011, and only decrees of the last five years are loaded. The
+  // rest are not legal subjects at all.
   { question: "Castrar perros", kind: "absent", expected: [] },
-  { question: "Prohibición de las carreras de galgos", kind: "absent", expected: [] },
   {
     question: "Reglas del ajedrez para torneos escolares",
     kind: "absent",
     expected: [],
   },
   { question: "Receta de empanadas salteñas", kind: "absent", expected: [] },
+  {
+    question: "Tabla de posiciones del campeonato de fútbol",
+    kind: "absent",
+    expected: [],
+  },
+  { question: "Cómo configurar un router wifi", kind: "absent", expected: [] },
 ];

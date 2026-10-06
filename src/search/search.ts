@@ -60,12 +60,14 @@ export type SearchOptions = SearchFilters & {
 };
 
 /**
- * Chosen by measuring (docs/evaluacion.md): the first chunk of the right
- * regulation scored 0.59 or more in every question, and questions about
- * subjects the corpus does not cover stayed at 0.561 or less. The window is
- * narrow; run `npm run eval -- --floors` again when the corpus changes.
+ * Chosen by measuring (docs/evaluacion.md), and already moved once: it was
+ * 0.57 with 41,000 chunks and had to come down when the corpus grew fivefold.
+ * With 0.55 every right answer of the evaluation is kept (the lowest scores
+ * 0.566) and every question about a subject the corpus does not cover is
+ * rejected (the highest scores 0.533). Run `npm run eval -- --floors` again
+ * whenever the corpus or the model changes.
  */
-export const DEFAULT_MIN_SIMILARITY = 0.57;
+export const DEFAULT_MIN_SIMILARITY = 0.55;
 
 /**
  * Whether a result is close enough to be shown. A regulation cited by number

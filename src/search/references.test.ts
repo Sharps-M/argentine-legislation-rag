@@ -26,6 +26,10 @@ describe("findReferences", () => {
       { type: "Decreto", number: "70", year: 2023 },
     ],
     ["Decreto 0282/2026", { type: "Decreto", number: "282", year: 2026 }],
+    ["Decreto-Ley 1285/58", { type: "Decreto/Ley", number: "1285", year: 1958 }],
+    ["decreto ley 6582/1958", { type: "Decreto/Ley", number: "6582", year: 1958 }],
+    ["Decreto/Ley N° 5965/63", { type: "Decreto/Ley", number: "5965", year: 1963 }],
+    ["Ley 340", { type: "Ley", number: "340" }],
     ["Resolución 15/2022", { type: "Resolución", number: "15", year: 2022 }],
     ["resolucion 794", { type: "Resolución", number: "794" }],
     [

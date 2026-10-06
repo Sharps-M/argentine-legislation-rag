@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -62,6 +62,39 @@ const run = async (options = {}) =>
   );
 
 describe("regulation texts in PostgreSQL", () => {
+  it("stores a page that carries binary junk, without the junk", async () => {
+    // Some InfoLEG pages have stray bytes in them; PostgreSQL rejects a NUL in text.
+    const html = Buffer.concat([
+      Buffer.from("<html><body><p>CONVENIOS</p><p>Ley N", "latin1"),
+      Buffer.from([0xba, 0x20, 0x00, 0x04, 0x10, 0x00]),
+      Buffer.from(
+        `24.089</p><p>ARTICULO 1 - Apruébase el convenio. ${".".repeat(400)}</p>` +
+          "<p>ARTICULO 2 - Comuníquese al Poder Ejecutivo.</p></body></html>",
+        "latin1",
+      ),
+    ]);
+    await writeFile(path.join(cacheDir, "600001.original.htm"), html);
+    await db.insert(regulations).values({
+      id: 600001,
+      type: "Ley",
+      number: "24089",
+      originalTextUrl:
+        "http://servicios.infoleg.gob.ar/infolegInternet/anexos/0-4999/488/norma.htm",
+    });
+
+    const report = await run();
+
+    expect(report.failed).toBe(0);
+
+    const [text] = await db
+      .select()
+      .from(regulationTexts)
+      .where(eq(regulationTexts.regulationId, 600001));
+    expect(text?.content).toContain("Ley Nº 24.089");
+    expect(text?.content).toContain("Apruébase el convenio. ...");
+    expect(text?.content).not.toMatch(/[\u0000-\u0008]/);
+  });
+
   it("stores the text and one chunk per part of a real law", async () => {
     const report = await run();
 

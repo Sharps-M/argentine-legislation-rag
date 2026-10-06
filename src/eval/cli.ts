@@ -54,7 +54,9 @@ Options:
 
 const KS = [1, 3, 5, 10] as const;
 const SWEEP_EF_SEARCH = [40, 100, 200, 400, 1000];
-const SWEEP_FLOORS = [0, 0.5, 0.52, 0.54, 0.56, 0.57, 0.58, 0.6, 0.62, 0.65];
+const SWEEP_FLOORS = [
+  0, 0.5, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.6, 0.62, 0.65,
+];
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`.padStart(4);
 

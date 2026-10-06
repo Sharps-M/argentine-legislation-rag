@@ -47,7 +47,7 @@ describe("searchResponse", () => {
     expect(await response.json()).toEqual({
       query: "seguridad social",
       model: "bge-m3",
-      minSimilarity: 0.57,
+      minSimilarity: 0.55,
       results: [hit],
     });
     expect(calls).toEqual([["seguridad social", { limit: 3, types: ["Ley"] }]]);

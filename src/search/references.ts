@@ -1,6 +1,6 @@
 /**
  * A regulation cited by its number inside a question: "Ley 27.818",
- * "Decreto N° 833/2026", "DNU 70/23".
+ * "Decreto N° 833/2026", "DNU 70/23", "Decreto-Ley 1285/58".
  */
 export type RegulationReference = {
   /** Regulation type as InfoLEG names it: "Ley", "Decreto"... */
@@ -16,6 +16,8 @@ export const MAX_REFERENCES = 3;
 
 // How people write each type, and the name InfoLEG gives it.
 const TYPES: [pattern: string, type: string][] = [
+  // Before "decreto" and "ley": it contains both words.
+  ["decreto[\\s/-]*ley", "Decreto/Ley"],
   ["ley", "Ley"],
   ["decreto\\s+de\\s+necesidad\\s+y\\s+urgencia", "Decreto"],
   ["decreto", "Decreto"],

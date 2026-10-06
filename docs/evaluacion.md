@@ -235,3 +235,123 @@ primera corrida después de reiniciar el equipo, y el barrido hacía una pasada 
 calentamiento que la corrida normal no hacía. No está confirmado. Desde ahora
 las dos hacen esa pasada; si el tiempo sigue alto, hay que mirar el plan de la
 consulta.
+
+## Ampliación del corpus — 6 de octubre de 2026
+
+Se decidió sumar todas las leyes y decretos-ley (decisión 29). Las mediciones de
+arriba son del corpus anterior: 5.069 normas y 41.275 fragmentos.
+
+Cambios en las preguntas de referencia, que pasan de 23 a 27:
+
+- "Prohibición de las carreras de galgos" y "Normativas relacionadas con
+  mascotas" dejan de ser preguntas sin respuesta: ahora deben encontrar las
+  leyes 27.330, 14.346 o 22.953.
+- Dos preguntas nuevas sobre esas leyes: la pena por maltrato animal y la
+  vacunación antirrábica.
+- "Castrar perros" sigue sin respuesta, porque el decreto que lo regula es de 2011. Se suman dos preguntas ajenas al derecho para mantener cinco.
+
+Pendiente, con el corpus nuevo cargado: `npm run eval`, `--floors` y `--sweep`.
+El piso de 0,57 y `ef_search` 100 se eligieron con la sexta parte de los
+fragmentos; hay que confirmar que siguen sirviendo.
+
+### Primera corrida con el corpus a medio cargar
+
+La descarga se cortó en la página 372 y la generación de vectores en el
+fragmento 2.048 (decisión 30). Con lo que había cargado:
+
+- **Velocidad de embeddings: unos 31 fragmentos por segundo** en la placa del
+  equipo de desarrollo.
+- **El tiempo de búsqueda vuelve a 7 ms**: los 134 ms de la corrida anterior
+  eran la caché fría después de reiniciar, como se suponía.
+- Las 18 preguntas con respuesta dan lo mismo que antes y las cinco sin
+  respuesta se rechazan.
+- En el barrido, `ef_search` 200 ahora usa el índice (6 ms) y 400 no (140 ms).
+  El punto en que PostgreSQL deja de usar el índice se movió al crecer la tabla:
+  otra razón para medirlo y no fijarlo de memoria.
+
+Las cuatro preguntas sobre las leyes de animales todavía no se midieron: esas
+leyes no tenían vectores.
+
+## Corpus ampliado: mediciones — 6 de octubre de 2026
+
+Carga completa después de los arreglos de la decisión 30.
+
+| Dato                    | Valor                                                    |
+| ----------------------- | -------------------------------------------------------- |
+| Normas                  | 34.973                                                   |
+| Páginas descargadas     | 8.529 (372 antes del corte y 8.157 después), 0 fallos    |
+| Normas con solo resumen | 23.458                                                   |
+| Fragmentos nuevos       | 170.684                                                  |
+| Vectores generados      | 171.642 en 84 minutos (34 por segundo), ninguno apartado |
+
+Ningún fragmento quedó apartado: el error que había cortado la corrida anterior
+fue una caída pasajera del servidor de modelos, no un texto.
+
+Las preguntas son 27: 22 con respuesta y 5 sin respuesta en el corpus.
+
+### Índice
+
+| Búsqueda         | R@1  | R@3  | R@5  | MRR   | Tiempo por pregunta |
+| ---------------- | ---- | ---- | ---- | ----- | ------------------- |
+| Exacta           | 55 % | 82 % | 86 % | 0,689 | 682 ms              |
+| `ef_search` 40   | 45 % | 73 % | 77 % | 0,596 | 5 ms                |
+| `ef_search` 100  | 55 % | 82 % | 86 % | 0,690 | 7 ms                |
+| `ef_search` 200  | 55 % | 82 % | 86 % | 0,690 | 9 ms                |
+| `ef_search` 400  | 55 % | 82 % | 86 % | 0,690 | 15 ms               |
+| `ef_search` 1000 | 55 % | 82 % | 86 % | 0,689 | 646 ms              |
+
+- **`ef_search` 100 se mantiene**: sigue devolviendo lo mismo que la búsqueda
+  exacta.
+- **Ahora el índice se justifica solo.** Con cinco veces más fragmentos, la
+  búsqueda exacta pasó de 133 a 682 ms; la del índice, de 5 a 7 ms. Son cien
+  veces de diferencia.
+- El punto en que PostgreSQL deja de usar el índice volvió a moverse: ahora lo
+  usa con 400 y lo abandona con 1000.
+
+### Piso de similitud: hubo que bajarlo
+
+| Piso        | R@5  | MRR   | Preguntas sin respuesta rechazadas |
+| ----------- | ---- | ----- | ---------------------------------- |
+| Sin piso    | 86 % | 0,690 | 0 de 5                             |
+| 0,50        | 86 % | 0,690 | 3 de 5                             |
+| 0,52        | 86 % | 0,690 | 4 de 5                             |
+| 0,54 y 0,56 | 86 % | 0,690 | 5 de 5                             |
+| 0,57        | 82 % | 0,668 | 5 de 5                             |
+| 0,60        | 73 % | 0,596 | 5 de 5                             |
+
+Con 0,57, el piso elegido con el corpus anterior, se perdía una respuesta
+correcta: el fragmento de la Ley 27.330 para "prohibición de las carreras de
+galgos" tiene 0,566. Del otro lado, "castrar perros" subió de 0,413 a 0,533,
+porque ahora hay leyes sobre animales cerca del tema.
+
+**Decisión: el piso pasa a 0,55.** La ventana que funciona va de 0,534 a 0,566.
+Con cualquier valor en ese rango se conservan las respuestas y se rechazan las
+cinco preguntas sin respuesta.
+
+Lo que deja en claro: el piso no es una propiedad del modelo sino del corpus.
+Cambió el contenido y cambió el valor. Una pregunta nueva tuvo su respuesta
+correcta en 0,566, por debajo del piso anterior, y un tema vecino sin respuesta
+subió a 0,533. La ventana se corrió hacia abajo y sigue siendo angosta.
+
+### Pregunta por pregunta
+
+- Las 18 preguntas anteriores dan lo mismo, salvo una: "Social security
+  agreement between Argentina and San Marino" pasó del primer puesto al segundo
+  (0,641 contra 0,651 de otra norma). Con todas las leyes cargadas hay más
+  convenios de seguridad social compitiendo.
+- "¿Qué pena tiene el maltrato o la crueldad contra los animales?" encuentra
+  primera la Ley 14.346 (0,666), y "vacunación antirrábica obligatoria de perros
+  y gatos", la Ley 22.953 (0,631). Antes de ampliar el corpus no tenían
+  respuesta posible.
+- "Normativas relacionadas con mascotas" encuentra una de las tres leyes
+  esperadas recién en el puesto 12 (0,575; el primer resultado tiene 0,598).
+  Falta mirar qué sale antes: puede haber otras normas sobre animales que
+  también sean respuestas válidas.
+- Siguen sin resolverse las dos de normas repetidas (servicios extraordinarios y
+  Antártida).
+
+### Qué queda
+
+- Mirar con `--verbose` qué devuelve la pregunta de mascotas.
+- Las normas que se repiten casi iguales.
+- Registrar el total exacto de fragmentos y el tamaño del índice.

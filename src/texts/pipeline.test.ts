@@ -186,6 +186,29 @@ describe("processTexts", () => {
     expect(report.aborted).toBeNull();
   });
 
+  it("counts a regulation the database rejects as a failure and goes on", async () => {
+    const { deps, saved } = harness(() => page("ARTÍCULO 1°.- Texto de la norma."));
+    const save = deps.store.save;
+    deps.store.save = async (id, text, chunks) => {
+      if (id === 2) throw new Error('invalid byte sequence for encoding "UTF8": 0x00');
+      return save(id, text, chunks);
+    };
+
+    const report = await processTexts(
+      [regulation({ id: 1 }), regulation({ id: 2 }), regulation({ id: 3 })],
+      deps,
+    );
+
+    expect(report).toMatchObject({ processed: 3, saved: 2, failed: 1 });
+    expect(report.failedExamples).toEqual([
+      {
+        id: 2,
+        reason: 'could not save: invalid byte sequence for encoding "UTF8": 0x00',
+      },
+    ]);
+    expect([...saved.keys()]).toEqual([1, 3]);
+  });
+
   it("stops when the server keeps answering 403", async () => {
     const { deps, requested } = harness(() => ({
       ok: false,

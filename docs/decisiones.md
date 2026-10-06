@@ -277,7 +277,7 @@ garantizar con un test.
 
 **Decisión**: un fragmento encontrado por significado se devuelve solo si su
 similitud con la pregunta alcanza un mínimo (`minSimilarity`, por defecto
-0,57). Si ninguno lo alcanza, el resultado es una lista vacía y el comando lo
+0,55). Si ninguno lo alcanza, el resultado es una lista vacía y el comando lo
 dice, con la similitud del fragmento más cercano. Las normas citadas por número
 no pasan por el piso: fueron pedidas por su nombre.
 **Motivo**: una búsqueda por similitud siempre tiene un "más cercano", por lejos
@@ -285,10 +285,13 @@ que esté. Ante "normativas relacionadas con mascotas", sin normas sobre el tema
 en el corpus, devolvía decretos sobre zoonosis y ganado con similitudes de 0,52
 a 0,56. Para una herramienta legal, mostrar normas que no tienen relación es
 peor que decir que no se encontró nada.
-**Medición**: con 0,57 se conservan todas las respuestas correctas de la
+**Medición**: con 0,55 se conservan todas las respuestas correctas de la
 evaluación y se rechazan las cinco preguntas sin respuesta. El margen es
-angosto: el fragmento correcto más bajo tuvo 0,590 y la pregunta sin respuesta
-más alta, 0,561.
+angosto: el fragmento correcto más bajo tuvo 0,566 y la pregunta sin respuesta
+más alta, 0,533.
+**El valor ya se movió una vez**: con el corpus inicial era 0,57. Al quintuplicar
+los fragmentos, una respuesta correcta quedó en 0,566 y el piso la cortaba. No
+es una constante del modelo: depende de qué hay en el corpus.
 **Cómo se elige el valor**: la evaluación incluye preguntas sobre temas que el
 corpus no cubre, que deben volver vacías. `npm run eval -- --floors` muestra,
 para varios pisos, cuántas respuestas correctas se conservan y cuántas de esas
@@ -297,6 +300,62 @@ resultados, para poder comparar varios valores con una sola corrida.
 **Limitación**: la similitud coseno no es una medida calibrada de relevancia. Un
 piso fijo separa los casos claros; para los dudosos hace falta un segundo
 juicio, que es el del modelo de lenguaje en la etapa 5.
+
+## 29. El corpus suma todas las leyes, sin límite de fecha
+
+**Decisión**: al recorte inicial (leyes y decretos de los últimos cinco años,
+decisión 11) se le agregan **todas las leyes y decretos-ley** del dataset,
+desde 1853. Los decretos anteriores y las resoluciones siguen afuera.
+**Motivo**: "reciente" no es lo mismo que "vigente". Una búsqueda sobre mascotas
+no encontraba nada porque lo que regula el tema es anterior al recorte: la ley
+de maltrato animal es de 1954 y la que prohíbe las carreras de perros, de 2016.
+Una herramienta de consulta legal tiene que encontrar la ley que rige, tenga la
+fecha que tenga.
+**Cómo se eligió el alcance**: midiendo el dataset antes de decidir.
+
+| Recorte                                         | Normas  | Con texto para descargar | Descarga a 1 pedido/s |
+| ----------------------------------------------- | ------- | ------------------------ | --------------------- |
+| Inicial: leyes y decretos de cinco años         | 5.069   | 2.986                    | hecha                 |
+| **Elegido: más todas las leyes y decretos-ley** | 34.973  | 11.515                   | 2 h 20 min más        |
+| Más todos los decretos                          | 105.982 | 32.383                   | 8 h más               |
+| Más las resoluciones                            | 328.560 | 142.597                  | 39 h más              |
+
+El dataset tiene 27.613 leyes (8.108 con texto publicado) y 2.462 decretos-ley
+(592 con texto). Las que no tienen texto se indexan por su resumen (decisión
+17). Con las resoluciones, el índice de vectores no entra en la memoria del
+equipo de desarrollo.
+**Costo que se acepta**: el Decreto 1088/2011, que regula la castración de
+perros y gatos, sigue afuera, igual que cualquier decreto anterior a 2021. Y el
+dataset no indica qué normas fueron derogadas: "todas las leyes" incluye leyes
+que ya no rigen.
+**Resultado**: 34.973 normas cargadas, 8.529 páginas descargadas sin fallos y
+170.684 fragmentos nuevos; había estimado 110.000, porque las leyes son más
+largas que el promedio anterior. Los vectores se generaron en 84 minutos, a 34
+fragmentos por segundo. La búsqueda con índice tarda 7 ms; la exacta pasó de 133
+a 682 ms. `ef_search` 100 siguió igualando a la búsqueda exacta; el piso de
+similitud hubo que bajarlo (decisión 28).
+
+## 30. Un dato defectuoso no detiene una corrida larga
+
+**Decisión**: tres cambios en las canalizaciones de texto y de embeddings.
+
+- Al extraer el texto se quitan los caracteres de control y las filas de relleno
+  ("......", "______") se reducen a tres caracteres.
+- Si la base rechaza el texto de una norma, se cuenta como fallo y la corrida
+  sigue con la siguiente.
+- Si el modelo falla con un lote de fragmentos, se reintenta de a uno. El que no
+  se puede vectorizar queda pendiente y se informa al final; si fallan cinco
+  seguidos, el problema es el modelo y la corrida se detiene.
+
+**Motivo**: al ampliar el corpus aparecieron páginas que los datos de prueba no
+tenían. La de la Ley 24.089 trae bytes sueltos, entre ellos 21 nulos, que
+PostgreSQL no acepta en una columna de texto. Es la última página que quedó en
+la caché: la descarga se cortó ahí, con 372 páginas de 8.529. Y la generación de vectores se cortó por un único error del
+servidor de modelos. En las dos, un caso entre miles tiraba abajo un proceso de
+horas.
+**Lo que no se hace**: tragarse el error. Cada norma o fragmento apartado queda
+en el informe final con su motivo, y un test reproduce la página con bytes
+nulos contra PostgreSQL real.
 
 ---
 
