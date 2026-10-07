@@ -22,7 +22,7 @@ describe("buildPrompt", () => {
           "[1] Decreto 832/2026 · Artículo 3 (dictada el 2026-08-28)",
           "Tema: ACUERDOS / ACTAS ACUERDO - HOMOLOGANSE",
           "<document>",
-          "La retribución no deberá superar el monto de PESOS NOVECIENTOS MIL.",
+          "La retribución no deberá superar el monto de PESOS NOVECIENTOS SIETE MIL NOVECIENTOS TREINTA Y CUATRO ($907.934).",
           "</document>",
         ].join("\n"),
         [
@@ -48,7 +48,7 @@ describe("buildPrompt", () => {
           "[1] Decreto 832/2026 · Artículo 3 (enacted 2026-08-28)",
           "Subject: ACUERDOS / ACTAS ACUERDO - HOMOLOGANSE",
           "<document>",
-          "La retribución no deberá superar el monto de PESOS NOVECIENTOS MIL.",
+          "La retribución no deberá superar el monto de PESOS NOVECIENTOS SIETE MIL NOVECIENTOS TREINTA Y CUATRO ($907.934).",
           "</document>",
         ].join("\n"),
         "Question: What is the cap?",

@@ -73,6 +73,10 @@ describe("answerQuestion", () => {
       outcome: "answered",
       cited: [1],
       unknownCitations: [],
+      // Both sources of this test hold the same article.
+      amounts: [
+        { amount: "$907.934", cited: [1], foundIn: [1, 2], status: "supported" },
+      ],
       provider: "fake",
       model: "fake-model",
       timings: expect.any(Object),
@@ -244,6 +248,25 @@ describe("answerQuestion", () => {
     expect(calls[0]?.options).toEqual({ limit: 8 });
   });
 
+  it("checks the amounts of the answer against the sources it was given", async () => {
+    const { search } = fakeSearch([
+      searchHit({ chunkId: 1, content: "El tope es de PESOS ($871.825)." }),
+      searchHit({ chunkId: 2, content: "El tope es de PESOS ($907.934)." }),
+    ]);
+    // The second amount is split between two pieces, as a stream may leave it.
+    const { chat } = fakeChat(["Era de $871.825 [1] y pasó a $907", ".934 [1]."]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿Cuál es el tope?"));
+
+    expect(events.at(-1)).toMatchObject({
+      outcome: "answered",
+      amounts: [
+        { amount: "$871.825", cited: [1], foundIn: [1], status: "supported" },
+        { amount: "$907.934", cited: [1], foundIn: [2], status: "other_source" },
+      ],
+    });
+  });
+
   it("does not ask the model when the search finds nothing", async () => {
     const { search } = fakeSearch([]);
     let asked = false;
@@ -269,6 +292,7 @@ describe("answerQuestion", () => {
         outcome: "no_sources",
         cited: [],
         unknownCitations: [],
+        amounts: [],
         provider: null,
         model: null,
         timings: expect.any(Object),

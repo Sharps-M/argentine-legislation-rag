@@ -214,14 +214,14 @@ answered in English.
 The endpoint streams server-sent events, so a reader sees the answer as it is
 written:
 
-| Event     | When                        | Data                                                                                                                    |
-| --------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `sources` | First, always               | The chunks, numbered, each with its regulation, date and link                                                           |
-| `asking`  | Before the text             | The model that is being asked: what a wait is a wait for                                                                |
-| `skipped` | Before the text, if any     | A model that could not answer, why, and how long it was waited for                                                      |
-| `text`    | Many times                  | A piece of the answer                                                                                                   |
-| `done`    | Last, when the answer ended | How it ended, who wrote it, the sources it cites, any citation of a source that does not exist, and where the time went |
-| `error`   | Last, when the model failed | Why: no key, key rejected, usage limit, or model unreachable                                                            |
+| Event     | When                        | Data                                                                                                                                                          |
+| --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sources` | First, always               | The chunks, numbered, each with its regulation, date and link                                                                                                 |
+| `asking`  | Before the text             | The model that is being asked: what a wait is a wait for                                                                                                      |
+| `skipped` | Before the text, if any     | A model that could not answer, why, and how long it was waited for                                                                                            |
+| `text`    | Many times                  | A piece of the answer                                                                                                                                         |
+| `done`    | Last, when the answer ended | How it ended, who wrote it, the sources it cites, any citation of a source that does not exist, every amount with where it was found, and where the time went |
+| `error`   | Last, when the model failed | Why: no key, key rejected, usage limit, or model unreachable                                                                                                  |
 
 What makes the answer checkable is done in code, not asked of the model:
 
@@ -231,6 +231,11 @@ What makes the answer checkable is done in code, not asked of the model:
 - **Citations are verified.** Every `[n]` in the answer is checked against the
   sources. A number that points at no source is reported (`unknownCitations`),
   and an answer that cites nothing is marked `uncited`.
+- **Amounts are verified.** Every amount of money in the answer is looked up in
+  the sources: it is in the one cited for it, in another one, or in none. A
+  figure is the one part of a statement that can be compared without
+  understanding the law, and a wrong one is the worst mistake a legal tool can
+  make.
 - **The sources go first.** They are sent before the model is asked, so they
   reach the reader even if the model then fails.
 

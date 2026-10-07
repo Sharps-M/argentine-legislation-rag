@@ -79,6 +79,7 @@ describe("answerResponse", () => {
       outcome: "answered",
       cited: [1],
       unknownCitations: [],
+      amounts: [{ amount: "$907.934", cited: [1], foundIn: [1], status: "supported" }],
       provider: "fake",
       model: "fake-model",
       timings: {

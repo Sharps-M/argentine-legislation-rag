@@ -1,6 +1,7 @@
 import { ChatModelError, type ChatFailure, type ChatModel } from "@/ai/chat";
 import type { SearchHit, SearchOptions } from "@/search/search";
 
+import { checkAmounts, type AmountCheck } from "./amounts";
 import { findCitations } from "./citations";
 import { detectLanguage, type AnswerLanguage } from "./language";
 import { buildPrompt, instructionsFor } from "./prompt";
@@ -61,6 +62,8 @@ export type AnswerEvent =
       cited: number[];
       /** Numbers it cites that are not among the sources. */
       unknownCitations: number[];
+      /** Every amount of money in the answer, checked against the sources. */
+      amounts: AmountCheck[];
       /** Who wrote it; `null` when no model was asked. */
       provider: string | null;
       model: string | null;
@@ -127,6 +130,7 @@ export async function* answerQuestion(
       outcome: "no_sources",
       cited: [],
       unknownCitations: [],
+      amounts: [],
       provider: null,
       model: null,
       timings: timings(),
@@ -180,6 +184,7 @@ export async function* answerQuestion(
     outcome: cited.length > 0 ? "answered" : "uncited",
     cited,
     unknownCitations: unknown,
+    amounts: checkAmounts(answer, sources),
     ...writer,
     timings: timings(),
   };

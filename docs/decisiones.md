@@ -466,9 +466,9 @@ respuesta no cita nada (`uncited`).
 **Motivo**: una instrucción en el _prompt_ es un pedido, no una garantía. Que un
 número apunte a una fuente real sí se puede comprobar sin leer la ley, y es el
 error más grave: una cita inventada con aspecto de verdadera.
-**Límite**: no comprueba que la fuente diga lo que la respuesta afirma. Para eso
-están el enlace al texto oficial y, más adelante, una evaluación de las
-respuestas.
+**Límite**: no comprueba que la fuente diga lo que la respuesta afirma. Para los
+montos, sí (decisión 40). Para lo demás están el enlace al texto oficial y, más
+adelante, una evaluación de las respuestas.
 
 ## 35. Sin fuentes no se le pregunta al modelo
 
@@ -627,6 +627,46 @@ lugar de dejarlo a la detección.
 **Poco razonamiento para Gemini**: se le pide esfuerzo de razonamiento bajo. La
 respuesta se lee de las fuentes, no se deduce, y la primera palabra debería
 llegar antes. No está medido todavía.
+
+## 40. Los montos de la respuesta se cotejan con las fuentes
+
+**Problema**: la verificación de citas (decisión 34) comprueba que `[2]` exista,
+no que la fuente 2 diga lo que la respuesta le atribuye. Para saber si los
+siete montos de una respuesta real eran correctos hubo que abrir tres normas y
+compararlos uno por uno. Estaban bien, pero nadie que consulte va a hacer eso.
+**Decisión**: cada monto de dinero de la respuesta se busca en el texto de las
+fuentes. El resultado tiene tres estados:
+
+| Estado         | Qué significa                                                          |
+| -------------- | ---------------------------------------------------------------------- |
+| `supported`    | El monto está en la fuente que la respuesta cita para él               |
+| `other_source` | Está en una de las fuentes, pero no en la citada, o no se citó ninguna |
+| `not_found`    | No está en ninguna fuente: se copió mal, se calculó o se inventó       |
+
+**Por qué los montos**: es la única parte de una afirmación que se puede
+comparar sin entender la norma. Una cifra está en el texto o no está. Y es el
+error que más daño hace: quien consulta un tope o una multa se queda con el
+número.
+**Cómo se compara**: solo los dígitos. "$1.598.124", "$ 1.598.124" y
+"$1,598,124" son el mismo monto escrito de tres formas, y una respuesta en
+inglés puede cambiar los separadores.
+**A qué fuente pertenece un monto**: a las citas que le siguen en su misma
+línea. En "era de $871.825 [1] y pasó a $907.934 [2]", cada monto tiene la suya.
+**Para no dar falsas alarmas**:
+
+- En la fuente se aceptan cifras sin signo de pesos: una tabla puede traer los
+  montos en una columna con el signo solo en el encabezado.
+- Un monto de menos de cuatro dígitos solo cuenta si la fuente lo escribe como
+  dinero. "30" aparece en "artículo 30" y en "treinta (30) días"; "1598124" no
+  aparece por casualidad.
+
+**Qué no se hace**: no se corrige ni se oculta nada. La respuesta sale como la
+escribió el modelo y el resultado del cotejo va en el último evento, para que
+la pantalla marque el monto dudoso.
+**Límites**: no cubre porcentajes, fechas ni montos escritos en letras. Ignorar
+los separadores hace que "$10,572" y "$10.572" se vean iguales. Y no detecta lo
+que falta: si un artículo fija cuatro valores y la respuesta da uno, ese uno
+está bien respaldado.
 
 ---
 

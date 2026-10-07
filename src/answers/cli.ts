@@ -8,6 +8,7 @@ import { createDb } from "../db/client";
 import { getEnv } from "../env";
 import { parseSearchParams } from "../search/params";
 import { QueryEmbeddingError, searchChunks } from "../search/search";
+import type { AmountCheck } from "./amounts";
 import { answerQuestion, type AnswerEvent, type AnswerTimings } from "./answer";
 import { isAnswerLanguage } from "./language";
 import type { AnswerSource } from "./sources";
@@ -139,6 +140,31 @@ const timingsLine = (timings: AnswerTimings) =>
     .filter(Boolean)
     .join(" · ");
 
+const cites = (numbers: number[]) => numbers.map((n) => `[${n}]`).join(", ");
+
+/** What the check of the amounts found, one line per thing worth saying. */
+function amountLines(amounts: AmountCheck[]): string[] {
+  if (amounts.length === 0) return [];
+
+  const problems = amounts.filter((check) => check.status !== "supported");
+  if (problems.length === 0) {
+    return [
+      amounts.length === 1
+        ? "Amounts: 1, found in the source it cites."
+        : `Amounts: ${amounts.length}, each found in the source it cites.`,
+    ];
+  }
+
+  return problems.map((check) => {
+    if (check.status === "not_found") {
+      return `Warning: ${check.amount} is not in any of the sources.`;
+    }
+    return check.cited.length > 0
+      ? `Warning: ${check.amount} is in ${cites(check.foundIn)}, not in the source cited for it (${cites(check.cited)}).`
+      : `Warning: ${check.amount} is in ${cites(check.foundIn)}, but the answer cites no source for it.`;
+  });
+}
+
 /**
  * Prints the events of one answer as they come. Each model asked gets a line
  * of its own, left open until it either starts writing or is given up on, so
@@ -212,6 +238,7 @@ function printer() {
             `Cites: ${cited.map((source) => `[${source.n}] ${source.title}`).join("; ")}`,
           );
         }
+        for (const line of amountLines(event.amounts)) console.log(line);
         if (event.unknownCitations.length > 0) {
           console.log(
             `Warning: it cites ${event.unknownCitations.map((n) => `[${n}]`).join(", ")}, which is not among the sources.`,

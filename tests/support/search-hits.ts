@@ -8,7 +8,8 @@ export function searchHit(overrides: Partial<SearchHit> = {}): SearchHit {
     similarity: 0.7,
     section: "article",
     label: "Artículo 3",
-    content: "La retribución no deberá superar el monto de PESOS NOVECIENTOS MIL.",
+    content:
+      "La retribución no deberá superar el monto de PESOS NOVECIENTOS SIETE MIL NOVECIENTOS TREINTA Y CUATRO ($907.934).",
     earlierVersions: [],
     ...overrides,
     regulation: {
