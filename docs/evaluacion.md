@@ -579,9 +579,86 @@ que quedan debajo de otra norma.
   un fragmento propio de 289 caracteres. Falta saber si lo saltea el índice o
   si el modelo lo puntúa bajo; `npm run eval -- --exact --verbose` lo dice.
 
-### Qué queda
+## Confirmación con los valores por defecto — 7 de octubre de 2026
 
-- Confirmar con `npm run eval` que los valores por defecto dan lo medido.
-- Repetir `npm run eval -- --sweep`: la tabla del índice es anterior a la
-  corrección de las dos preguntas.
-- El diagnóstico de la pregunta por el Decreto 866/2025.
+`npm run eval`, con el agrupamiento ya encendido (cadena, 0,95):
+
+| Preguntas               | R@1   | R@3   | R@5   | MRR   |
+| ----------------------- | ----- | ----- | ----- | ----- |
+| Todas (25)              | 72 %  | 88 %  | 92 %  | 0,807 |
+| Por tema (16)           | 81 %  | 94 %  | 94 %  | 0,870 |
+| Por número de norma (4) | 100 % | 100 % | 100 % | 1,000 |
+| En inglés (2)           | 50 %  | 100 % | 100 % | 0,750 |
+| Edición anterior (3)    | 0 %   | 33 %  | 67 %  | 0,250 |
+
+Sin respuesta en el corpus: 5 de 5 rechazadas. 28 ms por pregunta. Coincide con
+lo que anticipaba el barrido.
+
+### El costo, mejor medido
+
+La misma corrida con búsqueda exacta y sin agrupar (`--exact --versions off`)
+permite comparar pregunta por pregunta contra la búsqueda por defecto (con
+índice y agrupando):
+
+| Pregunta                                  | Sin agrupar | Agrupando   |
+| ----------------------------------------- | ----------- | ----------- |
+| Adicional antártico                       | 14          | 1           |
+| Tope de servicios extraordinarios         | fuera de 20 | 1           |
+| Residentes del Garrahan                   | 2           | 1           |
+| Escuela Nacional de Bibliotecarios        | 2           | 1           |
+| Acta del SINEP del 28 de mayo (`earlier`) | 2           | 2           |
+| Tope de servicios desde junio (`earlier`) | 2           | 4           |
+| Supresión de una secretaría (`earlier`)   | fuera de 20 | fuera de 20 |
+
+En la segunda medición escribí que las preguntas `earlier` no se veían
+afectadas. Era cierto para el recall@5, que es lo que mostraba el barrido, y
+no del todo: **el tope de servicios desde junio baja del puesto 2 al 4**. El
+artículo del Decreto 552/2026 queda listado debajo del 832/2026, en el primer
+resultado, y la norma vuelve a aparecer por sus anexos. El MRR de ese grupo
+pasa de 0,333 a 0,250.
+
+La decisión no cambia: cuatro preguntas pasan al primer puesto, dos de ellas
+desde muy lejos, y la que baja sigue a la vista en el primer resultado. Pero el
+costo existe y es este.
+
+### La pregunta que el modelo no encuentra
+
+"Decreto que suprime la Secretaría de Comunicación y Medios del organigrama de
+la Administración Nacional" no encuentra el Decreto 866/2025 ni con búsqueda
+exacta. No es el índice ni el agrupamiento: es el modelo, que puntúa ese
+artículo por debajo de los veinte primeros (el quinto resultado tiene 0,643).
+
+El artículo dice "Suprímese del Anexo I -Organigrama de Aplicación de la
+Administración Nacional centralizada hasta nivel de Subsecretaría-, aprobado por
+el artículo 1° del Decreto N° 50 del 19 de diciembre de 2019 y sus
+modificatorios, el Apartado IV TER, SECRETARÍA DE COMUNICACIÓN Y MEDIOS". Dos
+tercios del texto son la fórmula de remisión, que comparten decenas de artículos
+de otros decretos. Es una hipótesis, no una medición.
+
+La pregunta se queda en el conjunto: es un fallo real y sirve para medir
+cualquier mejora futura (reescritura de la pregunta, reordenamiento).
+
+### Configuración del índice, con las 25 preguntas
+
+`npm run eval -- --sweep`, solo similitud:
+
+| Búsqueda         | R@1  | R@5  | MRR   | Tiempo por pregunta |
+| ---------------- | ---- | ---- | ----- | ------------------- |
+| Exacta           | 56 % | 84 % | 0,699 | 622 ms              |
+| `ef_search` 40   | 52 % | 76 % | 0,636 | 5 ms                |
+| `ef_search` 100  | 56 % | 84 % | 0,700 | 8 ms                |
+| `ef_search` 200  | 56 % | 84 % | 0,699 | 9 ms                |
+| `ef_search` 400  | 56 % | 84 % | 0,699 | 15 ms               |
+| `ef_search` 1000 | 56 % | 84 % | 0,699 | 611 ms              |
+
+`ef_search` 100 se mantiene. La milésima de diferencia en el MRR es la pregunta
+de mascotas: la búsqueda exacta pone la ley esperada en el puesto 16 y el índice
+en el 12, porque saltea cuatro fragmentos que la exacta sí devuelve antes. Es la
+aproximación del índice a la vista, y no cambia ningún recall.
+
+### Qué queda para la etapa 5
+
+- Preguntas amplias: reescribir la pregunta antes de buscar.
+- Elegir entre ediciones por su fecha: el modelo de lenguaje recibe las fechas
+  de cada resultado y de las normas listadas debajo.
+- La pregunta por el Decreto 866/2025.

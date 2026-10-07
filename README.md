@@ -211,27 +211,29 @@ latest issue gains against what an earlier one loses. The set includes
 questions about subjects the corpus does not cover, which must come back empty,
 and questions that ask for an issue that is not the latest of its series.
 
-Measured on the full corpus (34,973 regulations, 211,770 chunks), 22
+Measured on the full corpus (34,973 regulations, 211,770 chunks), 25
 questions with a known answer, similarity search alone:
 
 | Search                         | recall@1 | recall@5 | MRR  | Time per query |
 | ------------------------------ | -------- | -------- | ---- | -------------- |
-| Exact scan (no index)          | 55%      | 86%      | 0.69 | 682 ms         |
-| HNSW index, pgvector's default | 45%      | 77%      | 0.60 | 5 ms           |
-| HNSW index, `ef_search = 100`  | 55%      | 86%      | 0.69 | 7 ms           |
+| Exact scan (no index)          | 56%      | 84%      | 0.70 | 622 ms         |
+| HNSW index, pgvector's default | 52%      | 76%      | 0.64 | 5 ms           |
+| HNSW index, `ef_search = 100`  | 56%      | 84%      | 0.70 | 8 ms           |
 
 With its default settings the approximate index was skipping answers the model
-does find; at `ef_search = 100` it returns the same results as the exact scan,
-about a hundred times faster. That is the value the search uses. Five more
-questions, about subjects the corpus does not cover, all come back empty.
+does find; at `ef_search = 100` it finds the same ones as the exact scan, some
+eighty times faster. That is the value the search uses. Five more questions,
+about subjects the corpus does not cover, all come back empty.
 
 The same measurements were taken on a corpus a fifth of this size. The index
 setting held; the minimum similarity did not, and had to come down from 0.57 to
 0.55.
 
 The grouping of reissued provisions was measured on the whole search (lookup by
-citation, minimum similarity), with the same 22 questions after two of them
-were corrected to accept a later decree that restates their answer:
+citation, minimum similarity). The first three columns are the 22 questions
+that ask for the regulation in force; the last one, three questions that ask
+for an issue that is not the latest of its series, which is what the grouping
+could hurt:
 
 | Grouping                                | recall@1 | recall@5 | MRR  | Earlier issues, recall@5 |
 | --------------------------------------- | -------- | -------- | ---- | ------------------------ |
@@ -239,17 +241,25 @@ were corrected to accept a later decree that restates their answer:
 | 0.95, compared with the group's best    | 73%      | 95%      | 0.83 | 33%                      |
 | 0.95, compared with any member (chosen) | 82%      | 95%      | 0.88 | 67%                      |
 
-The last column is three questions that ask for an issue that is not the latest
-one: they are what the grouping could hurt. Comparing each chunk with the best
-one of its group cut a series into pieces and buried one of those answers;
-linking through any member keeps the series whole and leaves them where they
-were. It costs time: 27 ms per query instead of 9, because a hundred chunks
-are fetched and compared with each other.
+Comparing each chunk with the best one of its group cut a series into pieces
+and buried one of the earlier answers; linking through any member keeps the
+series whole. It is not free. One of the earlier answers goes from second place
+to fourth, with its article listed under the first result; and a query takes
+28 ms instead of 9, because a hundred chunks are fetched and compared with each
+other.
 
-What the search still gets wrong are very broad questions ("regulations about
-pets" finds animal-health laws before the pet laws) and questions that single
-out one issue by its date, which the model barely tells apart. Every
-measurement and what it led to is logged (in Spanish) in
+What the search still gets wrong:
+
+- **Very broad questions.** "Regulations about pets" finds animal-health laws
+  before the pet laws, which never use that word.
+- **One issue singled out by its date.** Asked for the agreement of 28 May, the
+  decree that approves the one of 25 August scores 0.787 and the right one
+  0.781.
+- **A question the model simply misses**: the decree that removes a secretariat
+  from the organisation chart is not among the first twenty, with or without
+  the index.
+
+Every measurement and what it led to is logged (in Spanish) in
 [`docs/evaluacion.md`](docs/evaluacion.md).
 
 ## Scripts

@@ -99,10 +99,11 @@ export const byRelevance = (
 
 /**
  * Chosen by measuring (docs/evaluacion.md). Linked by chain at 0.95, the latest
- * issue of a reissued provision leads: recall@1 went from 64% to 82%, while the
- * questions that ask for an earlier issue were found as often as before. Linked
- * by the best chunk of each group, the same threshold cut a series into several
- * groups and gained half as much.
+ * issue of a reissued provision leads: recall@1 went from 64% to 82%. Of three
+ * questions that ask for an earlier issue, two stayed where they were and one
+ * went from second place to fourth, listed under the first result. Linked by
+ * the best chunk of each group, the same threshold cut a series into several
+ * groups, gained half as much and buried one of those answers.
  *
  * `null` turns the grouping off. Run `npm run eval -- --versions-sweep` again
  * whenever the corpus or the model changes.

@@ -208,6 +208,8 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
   },
   // Decreto 866/2025: one of many amendments to the organisation chart of
   // Decreto 50/2019. Decreto 581/2026 is a later one, about other offices.
+  // A known miss: the model does not rank it among the first twenty, with or
+  // without the index (docs/evaluacion.md).
   {
     question:
       "Decreto que suprime la Secretaría de Comunicación y Medios del organigrama de la Administración Nacional",

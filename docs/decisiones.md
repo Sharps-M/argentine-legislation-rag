@@ -416,9 +416,11 @@ Agrupar por cadena es la única forma que llega a esa mejora sin empeorar el
 otro lado.
 Con 0,94 da casi lo mismo; se eligió 0,95 porque es el umbral cuyos grupos se
 revisaron uno por uno.
-**Costo que se acepta**: la búsqueda pasa de 9 a 27 ms. Y un límite que queda:
-el modelo casi no distingue fechas, así que elegir entre dos ediciones por su
-fecha es trabajo para la etapa 5.
+**Costo que se acepta**: la búsqueda pasa de 9 a 28 ms. Y una de las tres
+preguntas por una edición anterior baja del puesto 2 al 4: su artículo queda
+listado debajo de la edición más reciente, en el primer resultado.
+**Límite que queda**: el modelo casi no distingue fechas, así que elegir entre
+dos ediciones por su fecha es trabajo para la etapa 5.
 
 ## 32. Orden fijo entre fragmentos con la misma similitud
 
