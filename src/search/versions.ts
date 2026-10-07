@@ -140,31 +140,43 @@ const chainGroups = <T extends VersionCandidate>(
  * different regulation, enacted on a different day. `linkage` says to which
  * member of the group an item is compared. Groups keep the order of their best
  * item.
+ *
+ * The most recent issue leads because that is what a question usually wants.
+ * `askedFor` says otherwise: it marks the items that state something the
+ * question singles out, such as a date. When the most recent issue of a group
+ * is not one of them, the most recent that is comes out of the group and goes
+ * right before it, on its own.
  */
 export function groupVersions<T extends VersionCandidate>(
   items: readonly T[],
   minTextSimilarity: number,
   linkage: VersionLinkage = "best",
+  askedFor: (item: T) => boolean = () => false,
 ): VersionGroup<T>[] {
   const groups =
     linkage === "chain"
       ? chainGroups(items, minTextSimilarity)
       : bestGroups(items, minTextSimilarity);
 
-  return groups.map((members) => {
-    const leader = members.reduce((best, member) =>
-      isMoreRecent(member, best) ? member : best,
-    );
+  return groups.flatMap((members) => {
+    const mostRecent = (candidates: readonly T[]) =>
+      candidates.reduce((best, member) => (isMoreRecent(member, best) ? member : best));
 
-    return {
+    const leader = mostRecent(members);
+    const wanted = askedFor(leader) ? [] : members.filter(askedFor);
+    const apart = wanted.length > 0 ? mostRecent(wanted) : undefined;
+
+    const group: VersionGroup<T> = {
       leader,
       others: members
-        .filter((member) => member !== leader)
+        .filter((member) => member !== leader && member !== apart)
         .sort((a, b) => (b.enactedOn ?? "").localeCompare(a.enactedOn ?? ""))
         .map((item) => ({
           item,
           textSimilarity: cosineSimilarity(leader.embedding, item.embedding),
         })),
     };
+
+    return apart ? [{ leader: apart, others: [] }, group] : [group];
   });
 }

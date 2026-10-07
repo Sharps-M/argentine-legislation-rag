@@ -20,7 +20,8 @@
     "embed": "tsx --env-file-if-exists=.env src/embeddings/cli.ts",
     "search": "tsx --env-file-if-exists=.env src/search/cli.ts",
     "ask": "tsx --env-file-if-exists=.env src/answers/cli.ts",
-    "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts"
+    "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts",
+    "eval:answers": "tsx --env-file-if-exists=.env src/eval/answers-cli.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.90",

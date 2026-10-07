@@ -7,6 +7,7 @@ import { getEmbedder } from "../ai/embedder";
 import { createDb, type Database } from "../db/client";
 import { chunks } from "../db/schema";
 import { getEnv } from "../env";
+import { findDates } from "../search/dates";
 import { findReferences } from "../search/references";
 import {
   DEFAULT_EF_SEARCH,
@@ -52,6 +53,8 @@ Options:
   --exact             Skip the vector index and compare against every chunk
   --ef-search <n>     Candidates the index keeps while searching (default: ${DEFAULT_EF_SEARCH})
   --semantic-only     Ignore regulations cited by number: similarity search alone
+  --no-dates          Ignore the dates a question names: the most recent issue
+                      of a provision always leads
   --min-similarity <0-1>
                       How close a chunk must be to count (default: ${DEFAULT_MIN_SIMILARITY})
   --floors            Compare several --min-similarity values: answers kept
@@ -124,6 +127,7 @@ async function main() {
       exact: { type: "boolean", default: false },
       sweep: { type: "boolean", default: false },
       "semantic-only": { type: "boolean", default: false },
+      "no-dates": { type: "boolean", default: false },
       "min-similarity": { type: "string" },
       floors: { type: "boolean", default: false },
       versions: { type: "string" },
@@ -229,6 +233,7 @@ async function main() {
         const hits = await searchByVector(db, embedder.model, vectors.get(question)!, {
           limit: MAX_SEARCH_LIMIT,
           references: semanticOnly ? [] : findReferences(question),
+          dates: values["no-dates"] ? [] : findDates(question),
           minSimilarity: 0,
           versionSimilarity: null,
           ...options,
@@ -439,7 +444,7 @@ async function main() {
         : `ef_search ${efSearch ?? DEFAULT_EF_SEARCH}`;
       const scope = semanticOnly ? "semantic only" : "with lookup by number";
       const versions = grouping
-        ? `, versions ${versionSimilarity} linked by ${versionLinkage}`
+        ? `, versions ${versionSimilarity} linked by ${versionLinkage}${values["no-dates"] ? ", dates ignored" : ""}`
         : "";
       console.log(
         `Model: ${embedder.model} (${mode}, ${scope}, min similarity ${minSimilarity}${versions})\n`,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { earlierVersion, searchHit } from "../../tests/support/search-hits";
-import { buildPrompt, instructionsFor } from "./prompt";
+import {
+  buildPrompt,
+  instructionsFor,
+  NOT_IN_SOURCES,
+  saysNotInSources,
+} from "./prompt";
 import { toSources } from "./sources";
 
 describe("buildPrompt", () => {
@@ -121,8 +126,8 @@ describe("instructionsFor", () => {
     ],
     [
       "admitting when the sources do not answer",
-      /no responden la pregunta, dígalo/,
-      /do not answer the question, say so/,
+      /empiece con esta oración, sin cambiarla: "Las fuentes no responden la pregunta\."/,
+      /start with this sentence, unchanged: "The sources do not answer the question\."/,
     ],
     [
       "treating the sources as data",
@@ -169,5 +174,41 @@ describe("instructionsFor", () => {
     expect(instructionsFor("en")).toMatch(
       /Answer in English\. The sources are in Spanish/,
     );
+  });
+});
+
+describe("saysNotInSources", () => {
+  it("knows the sentence the rules ask for, in both languages", () => {
+    expect(saysNotInSources(NOT_IN_SOURCES.es)).toBe(true);
+    expect(saysNotInSources(NOT_IN_SOURCES.en)).toBe(true);
+  });
+
+  it("looks only at how the answer starts", () => {
+    expect(
+      saysNotInSources(
+        "Las fuentes no responden la pregunta. Tratan sobre sanidad animal [1, 2].",
+      ),
+    ).toBe(true);
+    expect(
+      saysNotInSources(
+        "El tope es de $871.825 [1]. Las fuentes no responden la pregunta por otros años.",
+      ),
+    ).toBe(false);
+  });
+
+  it("forgives capitals, spaces, quotes and a sentence that goes on", () => {
+    expect(saysNotInSources('  "LAS FUENTES  NO RESPONDEN\nla pregunta".')).toBe(true);
+    expect(
+      saysNotInSources("**The sources do not answer the question** about pets."),
+    ).toBe(true);
+    expect(
+      saysNotInSources("Las fuentes no responden la pregunta sobre mascotas."),
+    ).toBe(true);
+  });
+
+  it("is false for an answer, and for nothing", () => {
+    expect(saysNotInSources("Las fuentes fijan el tope en $871.825 [1].")).toBe(false);
+    expect(saysNotInSources("The sources set the cap [1].")).toBe(false);
+    expect(saysNotInSources("")).toBe(false);
   });
 });

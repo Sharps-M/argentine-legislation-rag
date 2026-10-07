@@ -13,6 +13,8 @@ export type AnswerSource = {
   /** The number used in citations, starting at 1. */
   n: number;
   chunkId: number;
+  /** InfoLEG id of the regulation the chunk belongs to. */
+  regulationId: number;
   /** "Decreto 832/2026 · Artículo 3" */
   title: string;
   /** ISO date the regulation was enacted, when known. */
@@ -27,7 +29,12 @@ export type AnswerSource = {
   match: SearchHit["match"];
   similarity: number;
   /** Older regulations with nearly the same text, newest first. */
-  earlier: { name: string; enactedOn: string | null; url: string }[];
+  earlier: {
+    regulationId: number;
+    name: string;
+    enactedOn: string | null;
+    url: string;
+  }[];
   /** How many more there are beyond the ones listed in `earlier`. */
   earlierOmitted: number;
 };
@@ -40,6 +47,7 @@ export function toSources(
   return hits.slice(0, max).map((hit, index) => ({
     n: index + 1,
     chunkId: hit.chunkId,
+    regulationId: hit.regulation.id,
     title: [hit.regulation.name, hit.label].filter(Boolean).join(" · "),
     enactedOn: hit.regulation.enactedOn,
     subject:
@@ -50,6 +58,7 @@ export function toSources(
     match: hit.match,
     similarity: hit.similarity,
     earlier: hit.earlierVersions.slice(0, MAX_EARLIER).map((version) => ({
+      regulationId: version.regulationId,
       name: version.name,
       enactedOn: version.enactedOn,
       url: version.url,

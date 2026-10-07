@@ -178,3 +178,69 @@ describe("groupVersions, chain linkage", () => {
     ]);
   });
 });
+
+describe("groupVersions, an issue asked for", () => {
+  const march = item("207/2026", 1, "2026-03-27", [1, 0.01]);
+  const june = item("552/2026", 2, "2026-06-30", [1, 0.02]);
+  const august = item("832/2026", 3, "2026-08-28", [1, 0.03]);
+  const other = item("otra norma", 4, "2026-09-01", [0, 1]);
+  const asked =
+    (...wanted: Item[]) =>
+    (candidate: Item) =>
+      wanted.includes(candidate);
+
+  it("takes it out of its group and puts it right before", () => {
+    const groups = groupVersions(
+      [other, august, march, june],
+      0.95,
+      "chain",
+      asked(june),
+    );
+
+    expect(names(groups)).toEqual([
+      ["otra norma"],
+      ["552/2026"],
+      ["832/2026", "207/2026"],
+    ]);
+  });
+
+  it("does the same when linking by the best item", () => {
+    const groups = groupVersions([august, march, june], 0.95, "best", asked(june));
+
+    expect(names(groups)).toEqual([["552/2026"], ["832/2026", "207/2026"]]);
+  });
+
+  it("changes nothing when the most recent is one of those asked for", () => {
+    const groups = groupVersions(
+      [march, june, august],
+      0.95,
+      "chain",
+      asked(august, june),
+    );
+
+    expect(names(groups)).toEqual([["832/2026", "552/2026", "207/2026"]]);
+  });
+
+  it("takes out only the most recent of several asked for", () => {
+    const groups = groupVersions(
+      [march, june, august],
+      0.95,
+      "chain",
+      asked(march, june),
+    );
+
+    expect(names(groups)).toEqual([["552/2026"], ["832/2026", "207/2026"]]);
+  });
+
+  it("leaves an item that is already on its own where it was", () => {
+    const groups = groupVersions([august, june, other], 0.95, "chain", asked(other));
+
+    expect(names(groups)).toEqual([["832/2026", "552/2026"], ["otra norma"]]);
+  });
+
+  it("changes nothing when nothing is asked for", () => {
+    expect(names(groupVersions([march, june, august], 0.95, "chain"))).toEqual([
+      ["832/2026", "552/2026", "207/2026"],
+    ]);
+  });
+});

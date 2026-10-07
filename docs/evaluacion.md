@@ -799,3 +799,57 @@ primera pregunta paga la carga.
   local seguida de otra pregunta.
 - Una evaluación de respuestas, no solo de búsqueda: tres casos a ojo no
   alcanzan para saber si una regla del _prompt_ mejora o empeora.
+
+## Primera evaluación de respuestas — 7 de octubre de 2026
+
+`npm run eval:answers -- --verbose`: siete preguntas, seis llamadas al modelo.
+Todas las escribió `gemini-3.5-flash-lite`, sin saltear ningún modelo, en 10,6 s
+en total (entre 0,9 y 3,0 s por respuesta).
+
+| Pregunta                              | Informe | Al leerla                                                      |
+| ------------------------------------- | ------- | -------------------------------------------------------------- |
+| Adicional antártico                   | ok      | Bien: siete montos, los siete en la fuente citada              |
+| Acta del SINEP del 28 de mayo         | ok      | Bien: cita el Decreto 565/2026                                 |
+| Tope de servicios desde junio de 2026 | ok      | **Mal**: dice que las fuentes no responden                     |
+| ¿Qué dispone la Ley 27818?            | ok      | Pobre: cita la fórmula de sanción y la vigencia, no el acuerdo |
+| Tratado con Francia (en inglés)       | ok      | Bien, en inglés; repite la cita en una línea suelta            |
+| Normativas relacionadas con mascotas  | FAIL    | Dice que las fuentes no responden: la búsqueda no trajo la ley |
+| Receta de empanadas                   | ok      | Bien: no se consultó ningún modelo                             |
+
+### El informe aprobó una respuesta que no respondía
+
+En la pregunta del tope, la respuesta fue "Las fuentes provistas no contienen
+información sobre el tope... Las fuentes tratan sobre montos vigentes en otros
+períodos [1, 2]". El informe la dio por buena por dos errores de la evaluación,
+no del modelo:
+
+- **Contaba como cita una lista de fuentes.** La respuesta nombró las fuentes
+  para decir de qué trataban, y una de ellas era del Decreto 552/2026.
+- **Miraba la norma, no el pasaje.** El 552/2026 estaba entre las fuentes por
+  sus anexos. El artículo 3, que fija el tope desde junio, estaba nombrado
+  debajo del 832/2026, sin su texto.
+
+Había anticipado que esa pregunta iba a fallar con "solo nombrada debajo de una
+más nueva". Falló la respuesta, como esperaba, pero el informe no lo vio.
+
+### Qué se cambió
+
+- La respuesta "las fuentes no responden" tiene un resultado propio
+  (decisión 43) y la evaluación no la aprueba.
+- El lugar de la norma se mide como en la evaluación de la búsqueda: si está
+  nombrada debajo de una fuente que va antes que la suya, cuenta como
+  escondida.
+- La fecha de la pregunta saca su edición del grupo (decisión 42): el artículo
+  3 del 552/2026 pasa a ser una fuente, con su texto.
+
+Verificado solo con datos de prueba: tres decretos con el mismo artículo y
+fechas distintas, y el modelo simulado. Falta medir con el corpus real.
+
+### Qué queda
+
+- Repetir `npm run eval:answers` y `npm run eval` con los cambios.
+- La Ley 27818: la respuesta cita la fórmula de sanción y el artículo de
+  vigencia. Hay que ver qué fragmentos trae la búsqueda por número y en qué
+  orden.
+- Mascotas: la búsqueda no trae las leyes. Es la pregunta amplia, pendiente.
+- Probar la hipótesis de la búsqueda lenta, que sigue sin resolver.

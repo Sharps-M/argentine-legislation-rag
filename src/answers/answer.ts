@@ -4,7 +4,7 @@ import type { SearchHit, SearchOptions } from "@/search/search";
 import { checkAmounts, type AmountCheck } from "./amounts";
 import { findCitations } from "./citations";
 import { detectLanguage, type AnswerLanguage } from "./language";
-import { buildPrompt, instructionsFor } from "./prompt";
+import { buildPrompt, instructionsFor, saysNotInSources } from "./prompt";
 import { MAX_SOURCES, toSources, type AnswerSource } from "./sources";
 
 export type SearchFn = (query: string, options: SearchOptions) => Promise<SearchHit[]>;
@@ -13,13 +13,15 @@ export type SearchFn = (query: string, options: SearchOptions) => Promise<Search
  * How an answer ended.
  *
  * - `answered`: the model wrote an answer and cited its sources.
+ * - `not_in_sources`: the model said the sources do not answer the question.
+ *   It may cite them to say what they are about; that is not an answer.
  * - `uncited`: the model wrote something that cites no source. Either it said
  *   the sources do not cover the question, or it failed to cite: in both cases
  *   nothing in it can be checked, and the reader is told.
  * - `no_sources`: the search found nothing close enough, so the model was not
  *   asked at all.
  */
-export type AnswerOutcome = "answered" | "uncited" | "no_sources";
+export type AnswerOutcome = "answered" | "not_in_sources" | "uncited" | "no_sources";
 
 /** Where the time of an answer went, in milliseconds since the question arrived. */
 export type AnswerTimings = {
@@ -181,7 +183,11 @@ export async function* answerQuestion(
   const { cited, unknown } = findCitations(answer, sources.length);
   yield {
     type: "done",
-    outcome: cited.length > 0 ? "answered" : "uncited",
+    outcome: saysNotInSources(answer)
+      ? "not_in_sources"
+      : cited.length > 0
+        ? "answered"
+        : "uncited",
     cited,
     unknownCitations: unknown,
     amounts: checkAmounts(answer, sources),

@@ -191,6 +191,13 @@ now listed together: the most recent leads and the others go under it
 is claimed beyond "nearly the same text": the dataset does not say which
 regulation repealed which.
 
+The most recent leads because that is what a question usually wants. A date in
+the question says otherwise: asked for the cap "a partir del 1° de junio de
+2026", the issue whose text states that date comes out of the group and is
+listed right before the most recent one. Dates are read as written, in Spanish,
+English or figures, and compared with the text, not through the model: to an
+embedding, two issues that differ in a month are the same text.
+
 ## Answering
 
 ```bash
@@ -231,6 +238,10 @@ What makes the answer checkable is done in code, not asked of the model:
 - **Citations are verified.** Every `[n]` in the answer is checked against the
   sources. A number that points at no source is reported (`unknownCitations`),
   and an answer that cites nothing is marked `uncited`.
+- **"The sources do not answer" is not an answer.** The model is told to open
+  with one fixed sentence when the sources do not answer the question, and an
+  answer that opens with it ends as `not_in_sources`, even if it then lists the
+  sources to say what they are about.
 - **Amounts are verified.** Every amount of money in the answer is looked up in
   the sources: it is in the one cited for it, in another one, or in none. A
   figure is the one part of a statement that can be compared without
@@ -294,7 +305,8 @@ yardstick for every later change to chunking, the model or the search.
 settings against the exact scan, in quality and time, and `--floors` compares
 minimum similarities: answers kept against unrelated results rejected.
 `--versions-sweep` compares ways of grouping reissued provisions: what the
-latest issue gains against what an earlier one loses. The set includes
+latest issue gains against what an earlier one loses, and `--no-dates` ignores
+the dates a question names, to see what reading them changes. The set includes
 questions about subjects the corpus does not cover, which must come back empty,
 and questions that ask for an issue that is not the latest of its series.
 
@@ -349,6 +361,36 @@ What the search still gets wrong:
 Every measurement and what it led to is logged (in Spanish) in
 [`docs/evaluacion.md`](docs/evaluacion.md).
 
+### Measuring the answers
+
+```bash
+npm run eval:answers -- --verbose
+```
+
+Asks seven of those questions ([`src/eval/answers.ts`](src/eval/answers.ts)),
+one at a time, and counts what can be counted without reading the answer:
+
+| Column    | What it checks                                             |
+| --------- | ---------------------------------------------------------- |
+| `cites`   | The answer cites a source of the regulation it should      |
+| `lang`    | It is written in the language of the question              |
+| `amounts` | The amounts it quotes are in the sources it cites for them |
+| `first`   | When the first word came                                   |
+| `model`   | Who wrote it                                               |
+
+They are seven because each one is a call to a model with a quota: one for each
+kind of trouble seen so far (several amounts, an earlier issue asked for by its
+date, a regulation cited by number, a question in English, a broad one) and one
+about a subject the corpus does not cover, which must end without asking any
+model. When an answer does not cite the expected regulation, the report says
+where that regulation was: among the sources, only named under a newer one, or
+not found, which tells a fault of the model from a fault of the search. An
+answer that says the sources do not answer fails, whatever sources it lists,
+unless the question is the one the corpus does not cover.
+
+`ok` means nothing countable is wrong, not that the answer is right: `--verbose`
+prints every answer to be read.
+
 ## Scripts
 
 | Command                    | What it does                             |
@@ -367,6 +409,7 @@ Every measurement and what it led to is logged (in Spanish) in
 | `npm run search`           | Semantic search from the command line    |
 | `npm run ask`              | Answer a question, citing its sources    |
 | `npm run eval`             | Measure the retrieval (recall@k, MRR)    |
+| `npm run eval:answers`     | Check a handful of answers               |
 
 The integration tests empty the tables they use, so they refuse to run against
 a database that holds a real ingestion. Use a separate database for them:

@@ -20,6 +20,7 @@ describe("toSources", () => {
     const [source] = toSources([searchHit()]);
 
     expect(source).toMatchObject({
+      regulationId: 429383,
       enactedOn: "2026-08-28",
       subject: "ACUERDOS / ACTAS ACUERDO - HOMOLOGANSE",
       url: "http://example.test/429383.htm",
@@ -54,6 +55,7 @@ describe("toSources", () => {
 
     expect(source?.earlier).toHaveLength(MAX_EARLIER);
     expect(source?.earlier[0]).toEqual({
+      regulationId: 0,
       name: "Decreto 0/2025",
       enactedOn: "2025-01-01",
       url: "http://example.test/0.htm",

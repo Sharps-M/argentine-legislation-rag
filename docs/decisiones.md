@@ -670,6 +670,101 @@ está bien respaldado.
 
 ---
 
+## 41. Una evaluación de respuestas chica: siete preguntas, lo que se puede contar
+
+**Problema**: las respuestas se venían revisando a ojo, tres por ronda. Eso
+alcanzó para encontrar los primeros errores, pero no para saber si un cambio en
+las reglas del _prompt_ o en las fuentes mejora una respuesta y empeora otra.
+**Decisión**: `npm run eval:answers` hace siete preguntas tomadas de la
+evaluación de la búsqueda (decisión 25), de las que ya se sabe qué norma las
+responde, y revisa cada respuesta con lo que el código ya calcula:
+
+| Qué se cuenta          | De dónde sale                                       |
+| ---------------------- | --------------------------------------------------- |
+| Cita la norma esperada | Las citas verificadas (decisión 34)                 |
+| Idioma                 | El mismo detector que elige el idioma (decisión 39) |
+| Montos                 | El cotejo con las fuentes (decisión 40)             |
+| Tiempos y modelo       | Los eventos de la respuesta (decisión 37)           |
+
+**Por qué siete**: cada pregunta es una llamada a un modelo con cupo, y las
+rondas reales mostraron que el cupo gratuito se agota rápido. Hay una pregunta
+por cada problema ya visto: varios montos, una edición anterior pedida por su
+fecha (dos formas), una norma citada por número, una pregunta en inglés y una
+amplia. La séptima es sobre un tema que el corpus no cubre y no llama a ningún
+modelo: comprueba que siga siendo así.
+**Por qué no un modelo que juzgue**: pedirle a otro modelo que califique la
+respuesta duplica las llamadas y agrega un juez que también se equivoca. Lo que
+se cuenta es poco, pero es exacto y se repite igual.
+**Dónde estaba la norma**: cuando la respuesta no cita la norma esperada, el
+informe dice si estaba entre las fuentes, si solo figuraba nombrada debajo de
+una más nueva o si la búsqueda no la trajo. Lo primero es un error del modelo;
+lo otro, de la búsqueda, y se arregla en otro lado.
+**Si ningún modelo responde**: la pregunta se informa como sin respuesta y no
+como error de la respuesta. Un cupo agotado no dice nada sobre la calidad.
+**Límites**: "ok" significa que no hay nada contable mal, no que la respuesta
+sea correcta. Una respuesta puede citar la norma debida y decir algo que la
+norma no dice. Por eso `--verbose` imprime las respuestas: hay que leerlas.
+Siete preguntas tampoco dan un porcentaje confiable; sirven para comparar una
+ronda con la anterior, pregunta por pregunta.
+
+## 42. Una fecha en la pregunta saca su edición del grupo
+
+**Problema**: al agrupar versiones (decisión 31) la más reciente va primero y
+las demás quedan nombradas debajo, sin su texto. Para quien pregunta por el
+tope "a partir del 1° de junio de 2026" eso es al revés: el Decreto 832/2026,
+el más reciente, fija los valores desde septiembre, y el 552/2026, que fija los
+de junio, queda como un nombre en una lista. En la primera evaluación de
+respuestas el modelo contestó que las fuentes no respondían la pregunta, y
+tenía razón.
+**Decisión**: las fechas que nombra la pregunta se leen en el código. Dentro de
+un grupo de versiones, si la más reciente no menciona esa fecha y otra sí, esa
+otra sale del grupo y se lista sola, justo antes. Si varias la mencionan, sale
+la más reciente de ellas.
+**Por qué en el texto y no con el modelo**: para el modelo de embeddings dos
+ediciones que difieren en un mes son el mismo texto (0,787 contra 0,781 en la
+pregunta del acta del SINEP). Una fecha escrita se puede comparar exactamente,
+igual que el número de una norma (decisión 27).
+**Qué se reconoce**: "1° de junio de 2026", "28 de mayo de 2026", "junio de
+2026", "June 1, 2026", "1 June 2026" y "01/06/2026" (día primero). Un mes sin
+día coincide con cualquier día de ese mes. Un año solo no cuenta: para eso
+están los filtros por año.
+**Por qué solo dentro de un grupo**: fuera de un grupo no se cambia el orden.
+Adelantar cualquier fragmento que mencione la fecha sería otra regla de
+relevancia, con más formas de equivocarse, y no hizo falta: el fragmento ya
+aparece por su similitud. El único caso en que la fecha no alcanzaba era el del
+texto escondido debajo de otro.
+**Por qué una sola por grupo**: una fecha puede aparecer en muchas ediciones
+(todas citan el mismo decreto de diciembre de 2023). Sacarlas a todas desarmaría
+el grupo y llenaría la lista de versiones viejas.
+**Límites**: compara fechas escritas, no períodos. "A mediados de 2026" o "el
+año pasado" no se reconocen, y la pregunta por lo que regía en julio no
+encuentra una edición que solo menciona junio y agosto. `npm run eval --
+--no-dates` mide la búsqueda sin esta regla.
+
+## 43. "Las fuentes no responden" es un resultado propio
+
+**Problema**: la regla del _prompt_ pedía decir cuándo las fuentes no responden
+y aclarar de qué tratan. El modelo cumplió y, para decir de qué trataban, citó
+las ocho fuentes. Con citas válidas, el código lo dio por respondido
+(`answered`) y la evaluación de respuestas lo aprobó: "cita la norma esperada".
+**Decisión**: el _prompt_ pide empezar con una oración fija ("Las fuentes no
+responden la pregunta." o "The sources do not answer the question.") y la
+respuesta que empieza así termina como `not_in_sources`, cite o no cite.
+**Por qué una oración fija**: es lo único que el código puede reconocer sin
+interpretar. Buscar frases parecidas ("no contienen información", "no tratan")
+es adivinar cómo lo va a decir cada modelo.
+**Tolerancia**: se ignoran mayúsculas, espacios y comillas, se aceptan las dos
+lenguas cualquiera sea la pedida, y la oración puede seguir ("...la pregunta
+sobre mascotas").
+**En la evaluación**: una respuesta así no pasa, salvo en la pregunta sobre un
+tema que el corpus no cubre, donde es lo correcto. El informe agrega dónde
+estaba la norma esperada.
+**Límites**: depende de que el modelo use la oración. Si dice lo mismo con
+otras palabras y lista las fuentes, vuelve a contar como respondida. Un modelo
+chico puede no seguir la regla; hay que mirarlo en cada ronda.
+
+---
+
 ## Desarrollo asistido por IA
 
 El proyecto se desarrolla con asistencia de IA bajo reglas explícitas, que

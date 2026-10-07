@@ -16,6 +16,7 @@ import type { Database } from "@/db/client";
 import { chunks, regulations, regulationTexts } from "@/db/schema";
 import { regulationName } from "@/embeddings/input";
 
+import { findDates, statesDate, type WrittenDate } from "./dates";
 import { findReferences, type RegulationReference } from "./references";
 import { groupVersions, type VersionLinkage } from "./versions";
 
@@ -66,6 +67,12 @@ export type SearchOptions = SearchFilters & {
    * whatever the similarity search finds. `searchChunks` fills this in.
    */
   references?: RegulationReference[];
+  /**
+   * Dates the question names. Among the issues of one provision, the one that
+   * states such a date is listed on its own, before the most recent.
+   * `searchChunks` fills this in.
+   */
+  dates?: WrittenDate[];
 };
 
 /**
@@ -213,6 +220,7 @@ export async function searchChunks(
 
   return searchByVector(db, embedder.model, vector, {
     references: findReferences(query),
+    dates: findDates(query),
     ...options,
   });
 }
@@ -248,6 +256,8 @@ export async function searchByVector(
   }
   // Versions of a provision sit a few places apart: look further than `limit`.
   const pool = versionSimilarity === null ? limit : Math.max(limit, VERSION_POOL);
+
+  const dates = options.dates ?? [];
 
   const efSearch = options.efSearch ?? DEFAULT_EF_SEARCH;
   if (!Number.isInteger(efSearch) || efSearch < 1 || efSearch > MAX_EF_SEARCH) {
@@ -428,6 +438,7 @@ export async function searchByVector(
       close.map((row) => ({ ...row, embedding: vectors.get(row.chunkId) ?? [] })),
       versionSimilarity,
       options.versionLinkage ?? DEFAULT_VERSION_LINKAGE,
+      (row) => statesDate(row.content, dates),
     ).map(({ leader, others }) =>
       toHit(
         leader,

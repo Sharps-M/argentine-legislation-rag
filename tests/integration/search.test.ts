@@ -511,6 +511,111 @@ describe("semantic search", () => {
     });
   });
 
+  describe("an issue asked for by its date", () => {
+    const article = [
+      "La retribución bruta mensual, normal, habitual, regular y permanente de los agentes",
+      "habilitados para realizar servicios extraordinarios, con excepción de los servicios",
+      "requeridos por terceros, no deberá superar el monto que se fija en el presente artículo,",
+      "que se actualizará conforme lo acuerden las partes signatarias, de pesos",
+    ].join(" ");
+
+    beforeEach(async () => {
+      await db.insert(regulations).values(
+        [
+          { id: 500011, number: "207", enactedOn: "2026-03-27" },
+          { id: 500012, number: "552", enactedOn: "2026-06-30" },
+          { id: 500013, number: "832", enactedOn: "2026-08-28" },
+        ].map((row) => ({
+          ...row,
+          type: "Decreto",
+          topic: "ACUERDOS",
+          title: "ACTAS ACUERDO - HOMOLOGANSE",
+        })),
+      );
+      await db.insert(chunks).values(
+        [
+          [500011, "ochocientos mil a partir del 1° de marzo de 2026"],
+          [500012, "ochocientos setenta mil a partir del 1° de junio de 2026"],
+          [500013, "novecientos mil a partir del 1° de septiembre de 2026"],
+        ].map(([regulationId, amount]) => ({
+          regulationId: Number(regulationId),
+          ordinal: 0,
+          section: "article",
+          label: "Artículo 3",
+          content: `${article} ${amount}.`,
+        })),
+      );
+      await embedAll();
+    });
+
+    const cap =
+      "tope de la retribución de los agentes habilitados para servicios extraordinarios";
+    const group = async (question: string, options = {}) =>
+      (await searchChunks(db, embedder, question, { minSimilarity: 0, ...options }))
+        .filter((hit) => hit.regulation.id >= 500011 && hit.regulation.id <= 500013)
+        .map((hit) => [
+          hit.regulation.name,
+          ...hit.earlierVersions.map((version) => version.name),
+        ]);
+
+    it("lists the most recent first when no date is asked for", async () => {
+      expect(await group(cap)).toEqual([
+        ["Decreto 832/2026", "Decreto 552/2026", "Decreto 207/2026"],
+      ]);
+    });
+
+    it("lists the issue that states the date before the most recent", async () => {
+      expect(await group(`${cap} a partir del 1° de junio de 2026`)).toEqual([
+        ["Decreto 552/2026"],
+        ["Decreto 832/2026", "Decreto 207/2026"],
+      ]);
+    });
+
+    it("reads the date however it is written", async () => {
+      expect(await group(`${cap} desde junio de 2026`)).toEqual([
+        ["Decreto 552/2026"],
+        ["Decreto 832/2026", "Decreto 207/2026"],
+      ]);
+      expect(await group(`cap on extraordinary services as of March 1, 2026`)).toEqual([
+        ["Decreto 207/2026"],
+        ["Decreto 832/2026", "Decreto 552/2026"],
+      ]);
+    });
+
+    it("changes nothing when the date is the one of the most recent", async () => {
+      expect(await group(`${cap} a partir del 1° de septiembre de 2026`)).toEqual([
+        ["Decreto 832/2026", "Decreto 552/2026", "Decreto 207/2026"],
+      ]);
+    });
+
+    it("changes nothing when no issue states the date", async () => {
+      expect(await group(`${cap} a partir del 1° de enero de 2020`)).toEqual([
+        ["Decreto 832/2026", "Decreto 552/2026", "Decreto 207/2026"],
+      ]);
+    });
+
+    it("puts it within reach of a short list", async () => {
+      const hits = await searchChunks(
+        db,
+        embedder,
+        `${cap} a partir del 1° de junio de 2026`,
+        { minSimilarity: 0, limit: 2 },
+      );
+      const names = hits.map((hit) => hit.regulation.name);
+
+      const at = names.indexOf("Decreto 552/2026");
+
+      expect(at).toBeGreaterThanOrEqual(0);
+      expect(names[at + 1]).toBe("Decreto 832/2026");
+    });
+
+    it("takes the dates it is given instead of reading the question", async () => {
+      expect(
+        await group(`${cap} a partir del 1° de junio de 2026`, { dates: [] }),
+      ).toEqual([["Decreto 832/2026", "Decreto 552/2026", "Decreto 207/2026"]]);
+    });
+  });
+
   describe("regulations cited by number", () => {
     it("puts the cited law first, even when the wording points elsewhere", async () => {
       // The words match the fuel decree; the number names the law.

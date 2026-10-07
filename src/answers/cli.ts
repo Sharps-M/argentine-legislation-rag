@@ -228,7 +228,11 @@ function printer() {
         }
 
         console.log(`\n\n— ${event.provider} · ${event.model}`);
-        if (event.outcome === "uncited") {
+        if (event.outcome === "not_in_sources") {
+          console.log(
+            "The sources found do not answer the question. See them above, or try other words.",
+          );
+        } else if (event.outcome === "uncited") {
           console.log(
             "This answer cites no source: nothing in it can be checked against a regulation.",
           );

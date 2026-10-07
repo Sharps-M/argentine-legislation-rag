@@ -309,6 +309,27 @@ describe("answerQuestion", () => {
     expect(events.at(-1)).toMatchObject({ outcome: "uncited", cited: [] });
   });
 
+  it("tells an answer that says the sources do not answer, even if it lists them", async () => {
+    const { search } = fakeSearch(hits);
+    const { chat } = fakeChat([
+      "Las fuentes no responden ",
+      "la pregunta. Tratan sobre otros períodos [1, 2].",
+    ]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿?"));
+
+    expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources", cited: [1, 2] });
+  });
+
+  it("tells it when it lists no source, too", async () => {
+    const { search } = fakeSearch(hits);
+    const { chat } = fakeChat(["The sources do not answer the question."]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿?"));
+
+    expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources", cited: [] });
+  });
+
   it("reports a citation of a source that does not exist", async () => {
     const { search } = fakeSearch(hits);
     const { chat } = fakeChat(["Lo dice [2] y también ", "[7]."]);
