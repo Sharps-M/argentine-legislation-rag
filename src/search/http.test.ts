@@ -10,6 +10,7 @@ const hit: SearchHit = {
   section: "article",
   label: "Artículo 1",
   content: "Apruébase el convenio.",
+  earlierVersions: [],
   regulation: {
     id: 427766,
     type: "Ley",
@@ -48,9 +49,27 @@ describe("searchResponse", () => {
       query: "seguridad social",
       model: "bge-m3",
       minSimilarity: 0.55,
+      versionSimilarity: 0.95,
       results: [hit],
     });
     expect(calls).toEqual([["seguridad social", { limit: 3, types: ["Ley"] }]]);
+  });
+
+  it("passes on a request to list every chunk on its own, and says so", async () => {
+    const calls: SearchOptions[] = [];
+    const search: SearchFn = async (_query, options) => {
+      calls.push(options);
+      return [];
+    };
+
+    const response = await searchResponse(
+      params("q=seguridad social&versions=off"),
+      search,
+      "bge-m3",
+    );
+
+    expect(await response.json()).toMatchObject({ versionSimilarity: null });
+    expect(calls).toEqual([{ limit: 8, versionSimilarity: null }]);
   });
 
   it("answers 200 with an empty list when nothing is close enough", async () => {

@@ -38,6 +38,16 @@ describe("parseSearchParams", () => {
     });
   });
 
+  it("reads how alike two texts must be to be listed together, or turns it off", () => {
+    expect(parse("q=combustibles&versions=0.9")).toMatchObject({
+      options: { versionSimilarity: 0.9 },
+    });
+    expect(parse("q=combustibles&versions=off")).toMatchObject({
+      options: { versionSimilarity: null },
+    });
+    expect(parse("q=combustibles")).not.toHaveProperty("options.versionSimilarity");
+  });
+
   it("accepts comma-separated types", () => {
     expect(parse("q=combustibles&type=Ley,%20Decreto")).toMatchObject({
       options: { types: ["Ley", "Decreto"] },
@@ -45,7 +55,9 @@ describe("parseSearchParams", () => {
   });
 
   it("treats empty values as absent", () => {
-    expect(parse("q=combustibles&limit=&type=&from=&to=&min_similarity=")).toEqual({
+    expect(
+      parse("q=combustibles&limit=&type=&from=&to=&min_similarity=&versions="),
+    ).toEqual({
       ok: true,
       query: "combustibles",
       options: { limit: 8 },
@@ -65,6 +77,9 @@ describe("parseSearchParams", () => {
     ["too many types", "q=combustibles&type=a,b,c,d,e,f", "type"],
     ["a similarity above 1", "q=combustibles&min_similarity=1.2", "min_similarity"],
     ["a negative similarity", "q=combustibles&min_similarity=-1", "min_similarity"],
+    ["a version threshold of zero", "q=combustibles&versions=0", "versions"],
+    ["a version threshold above 1", "q=combustibles&versions=1.5", "versions"],
+    ["a version threshold that is a word", "q=combustibles&versions=on", "versions"],
     [
       "a similarity that is not a number",
       "q=combustibles&min_similarity=high",

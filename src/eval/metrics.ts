@@ -12,6 +12,27 @@ export function firstRelevantRank(
   return index === -1 ? null : index + 1;
 }
 
+/**
+ * Position (1 = first) of the first result that lists one of the expected
+ * regulations under it, as an earlier version, or `null`. `nested` holds, for
+ * each result, the regulations grouped under it.
+ */
+export function firstNestedRank(
+  nested: readonly (readonly number[])[],
+  expected: readonly number[],
+): number | null {
+  const index = nested.findIndex((ids) => ids.some((id) => expected.includes(id)));
+  return index === -1 ? null : index + 1;
+}
+
+/**
+ * Whether a right answer lost its own place to a newer look-alike: it is listed
+ * under a result that comes before the regulation itself, or the regulation is
+ * not a result at all.
+ */
+export const isUnderNewer = (rank: number | null, nestedRank: number | null) =>
+  nestedRank !== null && (rank === null || nestedRank < rank);
+
 /** Share of questions whose answer appears within the first `k` results. */
 export function recallAtK(ranks: readonly (number | null)[], k: number): number {
   if (ranks.length === 0) return 0;

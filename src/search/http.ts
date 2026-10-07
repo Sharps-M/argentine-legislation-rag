@@ -1,6 +1,7 @@
 import { parseSearchParams } from "./params";
 import {
   DEFAULT_MIN_SIMILARITY,
+  DEFAULT_VERSION_SIMILARITY,
   QueryEmbeddingError,
   type SearchHit,
   type SearchOptions,
@@ -13,6 +14,11 @@ export type SearchResponseBody = {
   model: string;
   /** How close a chunk had to be to count; explains an empty list. */
   minSimilarity: number;
+  /**
+   * How alike two texts had to be for an earlier regulation to be listed under
+   * a newer one (`earlierVersions`); `null` when every chunk is listed on its own.
+   */
+  versionSimilarity: number | null;
   results: SearchHit[];
 };
 
@@ -45,6 +51,10 @@ export async function searchResponse(
       query: request.query,
       model,
       minSimilarity: request.options.minSimilarity ?? DEFAULT_MIN_SIMILARITY,
+      versionSimilarity:
+        request.options.versionSimilarity === undefined
+          ? DEFAULT_VERSION_SIMILARITY
+          : request.options.versionSimilarity,
       results,
     };
 

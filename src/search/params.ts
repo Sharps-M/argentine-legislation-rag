@@ -20,6 +20,7 @@ const schema = z
     from: year.optional(),
     to: year.optional(),
     min_similarity: z.coerce.number().min(0).max(1).optional(),
+    versions: z.union([z.literal("off"), z.coerce.number().gt(0).max(1)]).optional(),
   })
   .refine((value) => !value.from || !value.to || value.from <= value.to, {
     path: ["from"],
@@ -40,7 +41,8 @@ export type ParsedSearchRequest =
  * Validates the query string of a search request:
  * `?q=...&limit=8&type=Ley&type=Decreto&from=2024&to=2026&min_similarity=0.6`.
  *
- * `type` can be repeated or comma-separated. Empty values count as absent.
+ * `type` can be repeated or comma-separated. `versions` is how alike two texts
+ * must be to be listed together, or `off`. Empty values count as absent.
  */
 export function parseSearchParams(params: URLSearchParams): ParsedSearchRequest {
   const optional = (name: string) => params.get(name)?.trim() || undefined;
@@ -56,6 +58,7 @@ export function parseSearchParams(params: URLSearchParams): ParsedSearchRequest 
     from: optional("from"),
     to: optional("to"),
     min_similarity: optional("min_similarity"),
+    versions: optional("versions"),
   });
 
   if (!result.success) {
@@ -68,7 +71,15 @@ export function parseSearchParams(params: URLSearchParams): ParsedSearchRequest 
     };
   }
 
-  const { q, limit, type, from, to, min_similarity: minSimilarity } = result.data;
+  const {
+    q,
+    limit,
+    type,
+    from,
+    to,
+    min_similarity: minSimilarity,
+    versions,
+  } = result.data;
 
   return {
     ok: true,
@@ -79,6 +90,9 @@ export function parseSearchParams(params: URLSearchParams): ParsedSearchRequest 
       ...(from !== undefined && { yearFrom: from }),
       ...(to !== undefined && { yearTo: to }),
       ...(minSimilarity !== undefined && { minSimilarity }),
+      ...(versions !== undefined && {
+        versionSimilarity: versions === "off" ? null : versions,
+      }),
     },
   };
 }

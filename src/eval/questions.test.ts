@@ -32,7 +32,7 @@ describe("gold questions", () => {
 
   it("cover every kind of question", () => {
     expect(new Set(GOLD_QUESTIONS.map((item) => item.kind))).toEqual(
-      new Set(["topic", "reference", "english", "absent"]),
+      new Set(["topic", "reference", "english", "earlier", "absent"]),
     );
   });
 });

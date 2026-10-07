@@ -2,10 +2,14 @@
  * - `topic`: describes what the regulation is about, in everyday words.
  * - `reference`: names the regulation by its number.
  * - `english`: asked in English, to check cross-language retrieval.
+ * - `earlier`: asks for one regulation of a series (decrees reissued or
+ *   amended every few months) that is not the latest one. It measures what
+ *   grouping the versions of a provision costs: the answer must not end up
+ *   hidden under a newer look-alike.
  * - `absent`: about a subject the corpus does not cover. The right outcome is
  *   no result at all.
  */
-export type QuestionKind = "topic" | "reference" | "english" | "absent";
+export type QuestionKind = "topic" | "reference" | "english" | "earlier" | "absent";
 
 export type GoldQuestion = {
   question: string;
@@ -16,12 +20,18 @@ export type GoldQuestion = {
 
 /**
  * Regulations the questions point to that are not kept as test fixtures. Each
- * was read on InfoLEG before its question was written, on 2026-10-06.
+ * was read on InfoLEG before its question was written: the laws on 2026-10-06,
+ * the decrees on 2026-10-07.
  */
 export const READ_ONLINE: Record<number, string> = {
   153011: "Ley 14346",
   184650: "Ley 22953",
   268503: "Ley 27330",
+  421033: "Decreto 866/2025",
+  427139: "Decreto 552/2026",
+  427190: "Decreto 565/2026",
+  427568: "Decreto 581/2026",
+  428716: "Decreto 718/2026",
 };
 
 /**
@@ -71,11 +81,12 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
   },
 
   // Decreto 282/2026: proceeds of the Belgrano Cargas rolling stock sale.
+  // Decreto 718/2026 replaced its article 1: either one answers the question.
   {
     question:
       "¿A dónde va lo producido por la venta del material rodante de Belgrano Cargas?",
     kind: "topic",
-    expected: [425217],
+    expected: [425217, 428716],
   },
   {
     question: "Decreto 282/2026",
@@ -84,11 +95,12 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
   },
 
   // Decreto 269/2026: structure of the Jefatura de Gabinete de Ministros.
+  // Decreto 581/2026 states the objectives of that Secretaría again.
   {
     question:
       "Objetivos de la Secretaría de Innovación, Ciencia y Tecnología en materia de ciberseguridad",
     kind: "topic",
-    expected: [425100],
+    expected: [425100, 427568],
   },
   {
     question:
@@ -176,6 +188,31 @@ export const GOLD_QUESTIONS: GoldQuestion[] = [
     question: "Normativas relacionadas con mascotas",
     kind: "topic",
     expected: [153011, 268503, 184650],
+  },
+
+  // One issue of a series, asked for by its date. Each has a later issue among
+  // the questions above, with nearly the same text.
+  // Decreto 565/2026: the SINEP agreement before the one of Decreto 833/2026.
+  {
+    question:
+      "Homologación del acta acuerdo del 28 de mayo de 2026 del convenio colectivo sectorial del SINEP",
+    kind: "earlier",
+    expected: [427190],
+  },
+  // Decreto 552/2026: the cap that Decreto 832/2026 raised two months later.
+  {
+    question:
+      "Tope de la retribución de los agentes habilitados para realizar servicios extraordinarios a partir del 1° de junio de 2026",
+    kind: "earlier",
+    expected: [427139],
+  },
+  // Decreto 866/2025: one of many amendments to the organisation chart of
+  // Decreto 50/2019. Decreto 581/2026 is a later one, about other offices.
+  {
+    question:
+      "Decreto que suprime la Secretaría de Comunicación y Medios del organigrama de la Administración Nacional",
+    kind: "earlier",
+    expected: [421033],
   },
 
   // Subjects without a regulation in the corpus. Neutering is regulated by a

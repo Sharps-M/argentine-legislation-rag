@@ -11,6 +11,8 @@ import { findReferences } from "../search/references";
 import {
   DEFAULT_EF_SEARCH,
   DEFAULT_MIN_SIMILARITY,
+  DEFAULT_VERSION_LINKAGE,
+  DEFAULT_VERSION_SIMILARITY,
   isCloseEnough,
   MAX_EF_SEARCH,
   MAX_SEARCH_LIMIT,
@@ -19,7 +21,16 @@ import {
   type SearchHit,
   type SearchOptions,
 } from "../search/search";
-import { evaluate, isAbsent, type EvalReport, type Metrics } from "./metrics";
+import type { VersionLinkage } from "../search/versions";
+import {
+  evaluate,
+  firstNestedRank,
+  firstRelevantRank,
+  isAbsent,
+  isUnderNewer,
+  type EvalReport,
+  type Metrics,
+} from "./metrics";
 import { GOLD_QUESTIONS, type GoldQuestion } from "./questions";
 
 const HELP = `
@@ -45,8 +56,19 @@ Options:
                       How close a chunk must be to count (default: ${DEFAULT_MIN_SIMILARITY})
   --floors            Compare several --min-similarity values: answers kept
                       against unrelated results rejected, in one table
+                      (without grouping)
+  --versions <0-1|off>
+                      List together the chunks of different regulations whose
+                      texts are this similar, newest first (default: ${DEFAULT_VERSION_SIMILARITY ?? "off"})
+  --versions-link <best|chain>
+                      Compare each chunk with the best one of its group, or with
+                      any of its members (default: ${DEFAULT_VERSION_LINKAGE})
+  --versions-sweep    Compare several --versions values with both ways of
+                      linking: what the latest issue of a series gains against
+                      what an earlier one loses
   --sweep             Compare the exact search with several --ef-search values:
-                      quality and time per question, in one table (semantic only)
+                      quality and time per question, in one table (semantic
+                      only, without grouping)
   --min-recall <0-1>  Exit with an error if recall@5 is below this value
   --json              Print the report as JSON
   --help              Show this message
@@ -57,6 +79,9 @@ const SWEEP_EF_SEARCH = [40, 100, 200, 400, 1000];
 const SWEEP_FLOORS = [
   0, 0.5, 0.52, 0.53, 0.54, 0.55, 0.56, 0.57, 0.58, 0.6, 0.62, 0.65,
 ];
+
+const SWEEP_VERSIONS = [0.98, 0.97, 0.96, 0.95, 0.94, 0.93, 0.92, 0.9];
+const LINKAGES: VersionLinkage[] = ["best", "chain"];
 
 const percent = (value: number) => `${(value * 100).toFixed(0)}%`.padStart(4);
 
@@ -101,6 +126,9 @@ async function main() {
       "semantic-only": { type: "boolean", default: false },
       "min-similarity": { type: "string" },
       floors: { type: "boolean", default: false },
+      versions: { type: "string" },
+      "versions-link": { type: "string" },
+      "versions-sweep": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -140,6 +168,27 @@ async function main() {
     );
   }
 
+  const versionSimilarity =
+    values.versions === undefined
+      ? DEFAULT_VERSION_SIMILARITY
+      : values.versions === "off"
+        ? null
+        : Number(values.versions);
+  if (
+    versionSimilarity !== null &&
+    !(versionSimilarity > 0 && versionSimilarity <= 1)
+  ) {
+    throw new Error(
+      `--versions must be "off" or above 0 and at most 1, got "${values.versions}"`,
+    );
+  }
+
+  const linkOption = values["versions-link"];
+  if (linkOption !== undefined && linkOption !== "best" && linkOption !== "chain") {
+    throw new Error(`--versions-link must be "best" or "chain", got "${linkOption}"`);
+  }
+  const versionLinkage: VersionLinkage = linkOption ?? DEFAULT_VERSION_LINKAGE;
+
   const sql = postgres(getEnv().DATABASE_URL, { max: 1 });
 
   try {
@@ -168,8 +217,9 @@ async function main() {
     // The sweep measures the index, so it leaves the lookup by number out.
     const semanticOnly = values["semantic-only"] || values.sweep;
 
-    // The search runs once per question, without a similarity floor. Floors are
-    // then applied to what came back, so several can be compared on one run.
+    // Unless told otherwise, the search runs without a similarity floor and
+    // without grouping: floors are applied to what came back, so several can be
+    // compared on one run.
     const run = async (options: SearchOptions): Promise<Run> => {
       const retrieved = new Map<string, SearchHit[]>();
       let elapsed = 0;
@@ -180,6 +230,7 @@ async function main() {
           limit: MAX_SEARCH_LIMIT,
           references: semanticOnly ? [] : findReferences(question),
           minSimilarity: 0,
+          versionSimilarity: null,
           ...options,
         });
         elapsed += performance.now() - startedAt;
@@ -190,9 +241,13 @@ async function main() {
       return { retrieved, msPerQuestion: elapsed / questions.length };
     };
 
-    const score = (retrieved: Map<string, SearchHit[]>, floor: number) =>
+    const score = (
+      retrieved: Map<string, SearchHit[]>,
+      floor: number,
+      subset: GoldQuestion[] = questions,
+    ) =>
       evaluate(
-        questions,
+        subset,
         async (question) =>
           (retrieved.get(question) ?? [])
             .filter((hit) => isCloseEnough(hit, floor))
@@ -242,9 +297,102 @@ async function main() {
       return;
     }
 
+    /** Position of the first result that lists an expected regulation under it. */
+    const nestedRank = (hits: SearchHit[], expected: number[]) =>
+      firstNestedRank(
+        hits.map((hit) => hit.earlierVersions.map((version) => version.regulationId)),
+        expected,
+      );
+
+    if (values["versions-sweep"]) {
+      // The questions that ask for an earlier issue are scored apart: grouping
+      // is meant to help the others, and these show what it costs.
+      const earlier = questions.filter((question) => question.kind === "earlier");
+      const latest = questions.filter((question) => question.kind !== "earlier");
+
+      const settings: { linkage: VersionLinkage | null; threshold: number | null }[] = [
+        { linkage: null, threshold: null },
+        ...LINKAGES.flatMap((linkage) =>
+          SWEEP_VERSIONS.map((threshold) => ({ linkage, threshold })),
+        ),
+      ];
+
+      const rows = [];
+      for (const { linkage, threshold } of settings) {
+        // Grouping happens after the floor, so here the search applies it.
+        const { retrieved } = await run({
+          exact: values.exact,
+          efSearch,
+          minSimilarity,
+          versionSimilarity: threshold,
+          ...(linkage && { versionLinkage: linkage }),
+        });
+        const report = await score(retrieved, 0, latest);
+        const earlierReport = await score(retrieved, 0, earlier);
+
+        const underNewer = questions.filter((question) => {
+          const hits = retrieved.get(question.question) ?? [];
+          const rank = firstRelevantRank(
+            hits.map((hit) => hit.regulation.id),
+            question.expected,
+          );
+          return isUnderNewer(rank, nestedRank(hits, question.expected));
+        }).length;
+        const grouped = [...retrieved.values()]
+          .flat()
+          .reduce((sum, hit) => sum + hit.earlierVersions.length, 0);
+
+        rows.push({
+          linkage,
+          threshold,
+          metrics: report.overall,
+          earlier: earlierReport.overall,
+          underNewer,
+          rejection: report.rejection,
+          grouped,
+        });
+      }
+
+      if (values.json) {
+        console.log(
+          JSON.stringify({ model: embedder.model, skipped, versions: rows }, null, 2),
+        );
+      } else {
+        console.log(
+          `Model: ${embedder.model} · min similarity ${minSimilarity} · ${latest.filter((question) => !isAbsent(question)).length} questions, and ${earlier.length} that ask for an earlier issue\n`,
+        );
+        let previous: VersionLinkage | null = null;
+        for (const row of rows) {
+          if (row.linkage !== previous) console.log("");
+          previous = row.linkage;
+
+          const name =
+            row.threshold === null
+              ? "off".padEnd(10)
+              : `${row.linkage?.padEnd(5)} ${row.threshold.toFixed(2)}`;
+          console.log(
+            `${name}  ${metricsColumns(row.metrics)}   earlier R@1 ${percent(row.earlier.recall[1] ?? 0)} R@5 ${percent(row.earlier.recall[5] ?? 0)}   under a newer ${String(row.underNewer).padStart(2)}   rejected ${row.rejection.rejected}/${row.rejection.questions}   ${String(row.grouped).padStart(4)} grouped`,
+          );
+        }
+        console.log(
+          '\nearlier: questions that ask for an issue that is not the latest of its series.\nunder a newer: questions whose answer lost its place to a newer look-alike and is only listed under it.\nA good setting raises the first columns without lowering "earlier".\nCheck what is grouped with --verbose --versions <value> --versions-link <best|chain> before choosing.',
+        );
+      }
+      return;
+    }
+
+    // With versions grouped, the floor has to be applied before the grouping:
+    // the search does both. Otherwise it is applied here, on the raw results.
+    const grouping = versionSimilarity !== null && !values.floors;
+    const searchOptions: SearchOptions = {
+      exact: values.exact,
+      efSearch,
+      ...(grouping && { versionSimilarity, versionLinkage, minSimilarity }),
+    };
+
     // The first pass loads the data into memory; the second one is timed.
-    await run({ exact: values.exact, efSearch });
-    const { retrieved, msPerQuestion } = await run({ exact: values.exact, efSearch });
+    await run(searchOptions);
+    const { retrieved, msPerQuestion } = await run(searchOptions);
 
     if (values.floors) {
       const rows = [];
@@ -275,7 +423,7 @@ async function main() {
       return;
     }
 
-    const report = await score(retrieved, minSimilarity);
+    const report = await score(retrieved, grouping ? 0 : minSimilarity);
 
     if (values.json) {
       console.log(
@@ -290,8 +438,11 @@ async function main() {
         ? "exact search"
         : `ef_search ${efSearch ?? DEFAULT_EF_SEARCH}`;
       const scope = semanticOnly ? "semantic only" : "with lookup by number";
+      const versions = grouping
+        ? `, versions ${versionSimilarity} linked by ${versionLinkage}`
+        : "";
       console.log(
-        `Model: ${embedder.model} (${mode}, ${scope}, min similarity ${minSimilarity})\n`,
+        `Model: ${embedder.model} (${mode}, ${scope}, min similarity ${minSimilarity}${versions})\n`,
       );
       console.log("rank   top    hit   kind       question");
       for (const result of report.results) {
@@ -302,20 +453,24 @@ async function main() {
         const similarity = (hit: SearchHit | undefined) =>
           hit ? hit.similarity.toFixed(3) : "  —  ";
 
+        const nested = nestedRank(hits, result.expected);
         const outcome = isAbsent(result)
           ? result.returned === 0
             ? " ok"
             : `+${result.returned}`.padStart(3)
-          : result.rank === null
-            ? "  —"
-            : String(result.rank).padStart(3);
+          : result.rank !== null
+            ? String(result.rank).padStart(3)
+            : nested !== null
+              ? `^${nested}`.padStart(3)
+              : "  —";
 
         console.log(
           `${outcome}   ${similarity(hits[0])}  ${similarity(expectedHit)}  ${result.kind.padEnd(10)} ${result.question}`,
         );
 
         const wrong = isAbsent(result) ? result.returned > 0 : result.rank !== 1;
-        if (values.verbose && wrong) {
+        const grouped = hits.some((hit) => hit.earlierVersions.length > 0);
+        if (values.verbose && (wrong || grouped)) {
           for (const [index, hit] of hits.slice(0, 5).entries()) {
             const expected = result.expected.includes(hit.regulation.id) ? "*" : " ";
             const cited = hit.match === "reference" ? " [cited]" : "";
@@ -327,6 +482,15 @@ async function main() {
             console.log(
               `       ${expected}${index + 1}. ${hit.similarity.toFixed(3)}  ${where}${cited}${dropped} — ${title.slice(0, 90)}`,
             );
+            if (hit.earlierVersions.length > 0) {
+              const earlier = hit.earlierVersions.slice(0, 6).map((version) => {
+                const mark = result.expected.includes(version.regulationId) ? "*" : "";
+                return `${mark}${version.name} (${version.textSimilarity.toFixed(3)})`;
+              });
+              console.log(
+                `            + ${hit.earlierVersions.length} earlier: ${earlier.join(", ")}`,
+              );
+            }
           }
         }
       }
@@ -351,6 +515,11 @@ async function main() {
       );
       if (values.verbose) {
         console.log("* marks a chunk of the expected regulation.");
+      }
+      if (grouping) {
+        console.log(
+          '"+ N earlier" lists older regulations grouped under a result, with how similar their text is to it; * marks an expected one.\n"^N" means the expected regulation is not a result of its own: it is listed under result N.',
+        );
       }
       if (skipped > 0) {
         console.log(

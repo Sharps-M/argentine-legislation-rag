@@ -350,8 +350,238 @@ subió a 0,533. La ventana se corrió hacia abajo y sigue siendo angosta.
 - Siguen sin resolverse las dos de normas repetidas (servicios extraordinarios y
   Antártida).
 
+### Tamaño final
+
+| Dato                  | Valor    |
+| --------------------- | -------- |
+| Fragmentos            | 211.770  |
+| Fragmentos con vector | 211.770  |
+| Tabla de fragmentos   | 2.953 MB |
+| Índice HNSW           | 1.652 MB |
+
+### Qué devuelve la pregunta de mascotas
+
+Con `--verbose`, "Normativas relacionadas con mascotas" trae primero leyes
+sobre animales que no son de compañía: la Ley 23.899 (SENASA), la Ley 22.421
+(fauna silvestre), la Ley 24.696 (brucelosis) y el Decreto-Ley 5153/1945
+(ganadería). Las tres leyes esperadas aparecen recién en el puesto 12.
+
+No es un problema del índice ni del piso: es de vocabulario. Ninguna de las
+leyes esperadas usa la palabra "mascota". Dicen "animales", "perros", "canes",
+"gatos". Para el modelo, "mascotas" queda tan cerca de "sanidad animal" como de
+"malos tratos a los animales".
+
+Las normas que salen primero no son disparates, pero tampoco son lo que busca
+quien pregunta por mascotas. No las sumo como respuestas válidas: sería ajustar
+la vara al resultado.
+
+**Qué hacer**: reescribir la pregunta antes de buscar ("mascotas" → "animales
+domésticos, perros, gatos"). Es trabajo del modelo de lenguaje y entra en la
+etapa 5. Antes se puede comprobar a mano si la idea rinde, comparando
+`npm run search -- "mascotas"` con
+`npm run search -- "animales domésticos perros gatos"`.
+
 ### Qué queda
 
-- Mirar con `--verbose` qué devuelve la pregunta de mascotas.
-- Las normas que se repiten casi iguales.
-- Registrar el total exacto de fragmentos y el tamaño del índice.
+- Las normas que se repiten casi iguales: sección siguiente.
+- La brecha de vocabulario en las preguntas amplias: etapa 5.
+
+## Versiones de una misma disposición — 6 de octubre de 2026
+
+Qué se ve con `--verbose` en las preguntas que siguen fallando:
+
+| Pregunta                  | Esperada                      | Qué sale antes                                              |
+| ------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| Adicional antártico       | Decreto 834/2026, puesto 14   | Decretos 294/2025, 578/2025, 113/2025, 553/2026 y 1040/2024 |
+| Servicios extraordinarios | Decreto 832/2026, fuera de 20 | Decretos 112/2025, 1038/2024, 468/2024, 293/2025 y 206/2024 |
+
+En la primera, los cinco de arriba tienen entre 0,818 y 0,825 y la esperada,
+0,810. En la segunda, los cinco están entre 0,708 y 0,712. Son el mismo artículo
+reeditado: la similitud no puede distinguirlos, y tampoco debería. Lo que
+corresponde es mostrarlos como lo que son, versiones de una disposición, con la
+más reciente adelante (decisión 31).
+
+Lo mismo pasa, en menor medida, con Garrahan, bibliotecarios y combustibles.
+
+### Comprobado sin el modelo real
+
+Con un servidor de embeddings de prueba (vectores por hash, no por significado)
+el mecanismo agrupa y ordena bien, y dejó a la vista un error: juntaba dos
+decretos del mismo día. De ahí salió la regla de los días distintos.
+
+Esos vectores no sirven para elegir el umbral. Cuán parecidos son para bge-m3
+dos artículos reeditados solo se puede medir con bge-m3.
+
+## Versiones: primera medición — 7 de octubre de 2026
+
+`npm run eval -- --versions-sweep`, 22 preguntas con respuesta, piso 0,55:
+
+| Umbral  | R@1  | R@3  | R@5  | R@10 | MRR   | Fragmentos agrupados |
+| ------- | ---- | ---- | ---- | ---- | ----- | -------------------- |
+| Apagado | 55 % | 82 % | 86 % | 86 % | 0,690 | 0                    |
+| 0,99    | 55 % | 82 % | 86 % | 86 % | 0,690 | 0                    |
+| 0,98    | 55 % | 82 % | 86 % | 86 % | 0,690 | 7                    |
+| 0,97    | 55 % | 82 % | 86 % | 86 % | 0,691 | 46                   |
+| 0,96    | 55 % | 82 % | 86 % | 95 % | 0,699 | 149                  |
+| 0,95    | 64 % | 86 % | 95 % | 95 % | 0,767 | 250                  |
+| 0,93    | 68 % | 91 % | 95 % | 95 % | 0,801 | 342                  |
+| 0,90    | 73 % | 91 % | 95 % | 95 % | 0,833 | 412                  |
+
+Las cinco preguntas sin respuesta se rechazan con todos los umbrales. El tiempo
+por pregunta sube de 9 a 24 ms: se traen 100 fragmentos en lugar de 20, con sus
+vectores.
+
+**Lo que mejora** (con 0,95): el adicional antártico pasa del puesto 14 al 2;
+los servicios extraordinarios, de fuera de los 20 al 4; Garrahan y
+bibliotecarios, al primero.
+
+Los números invitan a bajar el umbral. Antes de elegirlo miré qué quedó
+agrupado, y aparecieron tres cosas que la tabla no muestra.
+
+### 1. Una misma serie queda partida en varios grupos
+
+Para el adicional antártico, con 0,95:
+
+| Puesto | Encabeza         | Debajo                                               |
+| ------ | ---------------- | ---------------------------------------------------- |
+| 1      | Decreto 208/2026 | 578/2025, 294/2025, 113/2025, 1040/2024, 838/2024... |
+| 2      | Decreto 834/2026 | 553/2026, 66/2026                                    |
+| 3      | Decreto 726/2022 | 352/2022, 290/2022, 135/2022, 743/2021               |
+| 4      | Decreto 686/2024 | 470/2024                                             |
+| 5      | Decreto 207/2024 | 287/2023                                             |
+
+Es una sola serie. Por fecha, los cuatro de 2026 van así: 66 (enero), 208
+(marzo), 553 (junio), 834 (agosto). El 208 quedó en un grupo y sus vecinos de
+enero y de junio en otro, y el primer resultado lo encabeza un decreto de marzo
+cuando existe el de agosto.
+
+La causa es cómo se arman los grupos: cada fragmento se compara solo con el
+mejor ubicado de su grupo. Entre dos reediciones la similitud va de 0,945 a
+0,971, así que un umbral de 0,95 cae en el medio de esa franja y corta la serie
+por donde toque. Bajar el umbral lo disimula; no lo corrige.
+
+### 2. Parecerse no es reemplazar
+
+- **Reedición que reemplaza**: el tope de servicios extraordinarios. Cada
+  decreto fija montos nuevos; el anterior deja de aplicarse.
+- **Acto nuevo de la misma serie**: las homologaciones del SINEP. Los decretos
+  833, 565, 207 y 37 de 2026 homologan cada uno un acta distinta. Quien busca
+  la del 28 de mayo necesita el 565, no el más reciente.
+- **Normas distintas con el mismo encabezado**: los decretos 581/2026 y
+  866/2025 quedaron agrupados con 0,972. Los dos modifican el organigrama del
+  Decreto 50/2019, pero uno transfiere oficinas a la Vocería Presidencial y el
+  otro suprime la Secretaría de Comunicación y Medios. Lo que se parece es el
+  "visto y considerando".
+
+El tercer caso tiene una similitud más alta (0,972) que casi todas las
+reediciones verdaderas. Ningún umbral los separa.
+
+Consecuencia: el agrupamiento no puede afirmar que una norma reemplaza a otra.
+Lo que puede decir es "hay normas anteriores con un texto casi idéntico". Así
+hay que presentarlo, y así hay que medirlo: lo que gana la pregunta que busca
+la última versión contra lo que pierde la que busca una anterior.
+
+### 3. Dos preguntas esperaban menos de lo correcto
+
+Leí los textos de dos normas que salían antes que la esperada:
+
+- **Belgrano Cargas**: el Decreto 718/2026 sustituye el artículo 1 del 282/2026.
+  El destino actual de lo producido por la venta está en el 718.
+- **Ciberseguridad**: el Decreto 581/2026 vuelve a enunciar los objetivos de la
+  Secretaría de Innovación, Ciencia y Tecnología, incluido el de
+  ciberseguridad.
+
+Las dos preguntas aceptan ahora cualquiera de las dos normas. No es ajustar la
+vara al resultado: en los dos casos la respuesta está en el texto que leí. Sí
+cambia la línea de base, y por eso la medición siguiente vuelve a incluir la
+fila "apagado".
+
+### Qué se cambió
+
+- **Segunda forma de armar los grupos** (`--versions-link chain`): un fragmento
+  se une a un grupo si se parece a cualquiera de sus miembros, empezando por los
+  pares más parecidos. Mantiene junta una serie aunque la primera y la última
+  edición ya no se parezcan tanto. El riesgo es el inverso: unir series
+  distintas a través de una norma intermedia. La forma anterior queda como
+  `best`.
+- **Tres preguntas de tipo `earlier`**, que piden una edición que no es la
+  última: el acta del SINEP del 28 de mayo (Decreto 565/2026), el tope de
+  servicios extraordinarios desde junio (552/2026) y la supresión de la
+  Secretaría de Comunicación y Medios (866/2025).
+- **Dos columnas nuevas en `--versions-sweep`**: el recall de esas tres
+  preguntas, y cuántas respuestas quedaron solo debajo de otra norma.
+- En `--verbose`, `^N` indica que la norma esperada no es un resultado propio:
+  está listada debajo del resultado N.
+
+## Versiones: segunda medición — 7 de octubre de 2026
+
+`npm run eval -- --versions-sweep`, con las dos preguntas corregidas. La línea
+de base ("apagado") subió por esa corrección: R@1 de 55 % a 64 % y MRR de 0,690
+a 0,749.
+
+| Forma   | Umbral | R@1  | R@3  | R@5  | MRR   | `earlier` R@5 | Bajo otra norma | Agrupados |
+| ------- | ------ | ---- | ---- | ---- | ----- | ------------- | --------------- | --------- |
+| Apagado | —      | 64 % | 86 % | 86 % | 0,749 | 67 %          | 0               | 0         |
+| `best`  | 0,96   | 64 % | 86 % | 86 % | 0,758 | 67 %          | 0               | 167       |
+| `best`  | 0,95   | 73 % | 91 % | 95 % | 0,826 | 33 %          | 1               | 288       |
+| `best`  | 0,93   | 77 % | 95 % | 95 % | 0,860 | 0 %           | 2               | 413       |
+| `best`  | 0,92   | 82 % | 95 % | 95 % | 0,890 | 33 %          | 2               | 440       |
+| `chain` | 0,97   | 64 % | 86 % | 86 % | 0,753 | 67 %          | 0               | 99        |
+| `chain` | 0,96   | 73 % | 91 % | 95 % | 0,823 | 33 %          | 1               | 267       |
+| `chain` | 0,95   | 82 % | 95 % | 95 % | 0,883 | 67 %          | 1               | 371       |
+| `chain` | 0,94   | 82 % | 95 % | 95 % | 0,890 | 67 %          | 1               | 437       |
+| `chain` | 0,93   | 82 % | 95 % | 95 % | 0,890 | 67 %          | 2               | 481       |
+| `chain` | 0,90   | 82 % | 95 % | 95 % | 0,890 | 67 %          | 2               | 577       |
+
+Las cinco preguntas sin respuesta se rechazan en todas las filas.
+
+### Lectura
+
+- **`best` gana de un lado lo que pierde del otro.** Para llegar a R@1 de 82 %
+  hay que bajar el umbral a 0,92, y las preguntas `earlier` caen de 67 % a
+  33 %. Es lo que anticipaba la primera medición: parte las series, y una
+  edición anterior queda enterrada debajo de un grupo ajeno.
+- **`chain` con 0,95 llega al mismo 82 % sin tocar `earlier`**, que queda en
+  67 %, igual que con el agrupamiento apagado.
+- Con `chain`, las series aparecen enteras. El adicional antártico: Decreto
+  834/2026 primero, con el 553, el 208 y el 66 de 2026 y los de 2025 debajo. El
+  tope de servicios extraordinarios: Decreto 832/2026 primero, con 22 ediciones
+  anteriores debajo; estaba fuera de los 20 primeros.
+- La serie del adicional antártico sigue en dos grupos: las ediciones hasta el
+  Decreto 207/2024, donde es el artículo 7, y las posteriores, donde es el
+  artículo 5. Entre unas y otras los textos ya no llegan al umbral.
+- **"Bajo otra norma: 1"** es la pregunta por el tope desde junio de 2026. El
+  artículo 3 del Decreto 552/2026 queda listado debajo del 832/2026, en el
+  primer resultado, y la norma aparece además por sí misma en el puesto 4.
+
+**Decisión: agrupamiento encendido, forma `chain`, umbral 0,95.** Entre 0,95 y
+0,94 los números son casi iguales (una pregunta sube del tercer puesto al
+segundo). Elijo 0,95 por dos razones: es el umbral cuyos grupos revisé uno por
+uno, y 25 preguntas no alcanzan para medir todas las uniones falsas que un
+umbral más bajo puede producir. De 0,93 para abajo ya son dos las respuestas
+que quedan debajo de otra norma.
+
+**Costo**: 27 ms por pregunta en lugar de 9.
+
+### Lo que el agrupamiento no arregla
+
+- **Las fechas.** Las tres preguntas `earlier` tienen R@1 de 0 % con el
+  agrupamiento apagado y encendido. Para "acta del 28 de mayo de 2026 del
+  SINEP", el Decreto 833/2026 (acta del 25 de agosto) tiene 0,787 y el 565/2026,
+  que es la respuesta, 0,781. El modelo casi no distingue una fecha de otra.
+  Elegir entre ediciones por fecha es trabajo para la etapa 5.
+- **El par 581/2026 y 866/2025** sigue agrupado (0,972): son normas distintas
+  con el mismo encabezado. Queda presentado como lo que es, un texto casi
+  idéntico en una norma anterior.
+- **La pregunta por el Decreto 866/2025 no se encuentra** entre los 20 primeros,
+  con el agrupamiento apagado o encendido, así que no mide lo que quería medir.
+  El fragmento existe y está bien cortado: procesé la página y el artículo 1 es
+  un fragmento propio de 289 caracteres. Falta saber si lo saltea el índice o
+  si el modelo lo puntúa bajo; `npm run eval -- --exact --verbose` lo dice.
+
+### Qué queda
+
+- Confirmar con `npm run eval` que los valores por defecto dan lo medido.
+- Repetir `npm run eval -- --sweep`: la tabla del índice es anterior a la
+  corrección de las dos preguntas.
+- El diagnóstico de la pregunta por el Decreto 866/2025.

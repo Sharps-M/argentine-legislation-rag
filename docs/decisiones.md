@@ -334,6 +334,9 @@ largas que el promedio anterior. Los vectores se generaron en 84 minutos, a 34
 fragmentos por segundo. La búsqueda con índice tarda 7 ms; la exacta pasó de 133
 a 682 ms. `ef_search` 100 siguió igualando a la búsqueda exacta; el piso de
 similitud hubo que bajarlo (decisión 28).
+**Tamaño final**: 211.770 fragmentos, todos con vector. La tabla ocupa 2.953 MB
+y el índice HNSW, 1.652 MB: entra en la memoria de un equipo de 16 GB, que es la
+condición para que la búsqueda tarde milisegundos.
 
 ## 30. Un dato defectuoso no detiene una corrida larga
 
@@ -356,6 +359,80 @@ horas.
 **Lo que no se hace**: tragarse el error. Cada norma o fragmento apartado queda
 en el informe final con su motivo, y un test reproduce la página con bytes
 nulos contra PostgreSQL real.
+
+## 31. Versiones de una misma disposición: la más reciente primero
+
+**Estado**: **encendida**, agrupando por cadena con umbral 0,95. Se eligió en
+dos mediciones; la primera mostró dos límites que obligaron a medir de otra
+manera (más abajo).
+**Problema**: hay disposiciones que se reeditan cada pocos meses. Cada decreto
+de recomposición salarial repite el artículo del adicional antártico con otros
+montos. Para el modelo son casi el mismo texto, así que la búsqueda los
+devuelve todos juntos, separados por milésimas, y puede poner primero el del año
+pasado: el vigente quedó en el puesto 14.
+**Decisión**: dos fragmentos se consideran versiones de una misma disposición
+cuando sus textos son casi idénticos (similitud coseno entre sus vectores por
+encima de un umbral), pertenecen a normas distintas y esas normas se dictaron en
+días distintos. De cada grupo se muestra primero la más reciente y las demás
+quedan listadas debajo, con su fecha y su enlace (`earlierVersions`).
+**Por qué no ordenar todo por fecha**: porque la fecha no dice nada sobre la
+relevancia. Lo más reciente solo desempata entre textos que dicen lo mismo.
+**Por qué no ocultar las anteriores**: porque el dataset no informa qué norma
+derogó a cuál. "Más reciente" es un dato; "vigente" sería una conclusión que no
+puedo respaldar. Además, quien consulta puede necesitar la versión de una fecha
+determinada.
+**Por qué días distintos**: dos decretos firmados el mismo día que comparten un
+párrafo no son una versión vieja y una nueva, son hermanos. Apareció al
+probarlo: el Decreto 832/2026 quedaba escondido debajo del 833/2026.
+**Cómo se calcula**: la búsqueda trae los 100 fragmentos más cercanos en lugar
+de 8, descarta los que no llegan al piso de similitud y compara entre sí los
+vectores de los que quedan. No hay columnas ni índices nuevos, y se puede
+apagar por consulta (`versions=off`).
+**Lo que mostró la primera medición** (detalle en `docs/evaluacion.md`):
+
+- Con umbral 0,95 el recall@5 pasa de 86 % a 95 %. Hasta ahí, lo esperado.
+- Comparar cada fragmento solo con el mejor de su grupo parte una misma serie en
+  varios grupos, y uno de ellos puede quedar encabezado por una edición vieja.
+  Se agregó una segunda forma de agrupar, por cadena (`chain`), para comparar.
+- La similitud no distingue una reedición que reemplaza a la anterior de un acto
+  nuevo de la misma serie, ni de dos normas distintas que comparten el
+  encabezado. Un par de este último tipo dio 0,972, más que casi todas las
+  reediciones verdaderas.
+
+**Consecuencia para el diseño**: el agrupamiento se presenta como "normas
+anteriores con un texto casi idéntico", nunca como "versión derogada". Y se mide
+de los dos lados: lo que gana quien busca la última edición y lo que pierde
+quien busca una anterior, con preguntas escritas para eso (tipo `earlier`).
+**Lo que decidió la segunda medición**:
+
+| Agrupamiento      | R@1  | R@5  | MRR   | Preguntas por una edición anterior, R@5 |
+| ----------------- | ---- | ---- | ----- | --------------------------------------- |
+| Apagado           | 64 % | 86 % | 0,749 | 67 %                                    |
+| `best`, 0,95      | 73 % | 95 % | 0,826 | 33 %                                    |
+| `best`, 0,92      | 82 % | 95 % | 0,890 | 33 %                                    |
+| **`chain`, 0,95** | 82 % | 95 % | 0,883 | 67 %                                    |
+
+Agrupar por cadena es la única forma que llega a esa mejora sin empeorar el
+otro lado.
+Con 0,94 da casi lo mismo; se eligió 0,95 porque es el umbral cuyos grupos se
+revisaron uno por uno.
+**Costo que se acepta**: la búsqueda pasa de 9 a 27 ms. Y un límite que queda:
+el modelo casi no distingue fechas, así que elegir entre dos ediciones por su
+fecha es trabajo para la etapa 5.
+
+## 32. Orden fijo entre fragmentos con la misma similitud
+
+**Decisión**: cuando dos fragmentos tienen exactamente la misma similitud, se
+ordenan por su identificador. El desempate se hace en la aplicación, sobre las
+filas que ya devolvió la base.
+**Motivo**: PostgreSQL no promete ningún orden entre filas empatadas, y el
+índice y la búsqueda exacta los devolvían en órdenes distintos. Lo delató un
+test que compara las dos búsquedas: fallaba solo después de una carga grande,
+cuando cambiaba la disposición física de la tabla. La misma pregunta tiene que
+dar siempre la misma lista.
+**Por qué no en la consulta**: agregar el identificador al `ORDER BY` le impide
+a PostgreSQL usar el índice de vectores para ordenar, y la búsqueda pasaría de
+milisegundos a recorrer toda la tabla.
 
 ---
 

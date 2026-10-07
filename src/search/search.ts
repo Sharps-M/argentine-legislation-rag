@@ -17,6 +17,7 @@ import { chunks, regulations, regulationTexts } from "@/db/schema";
 import { regulationName } from "@/embeddings/input";
 
 import { findReferences, type RegulationReference } from "./references";
+import { groupVersions, type VersionLinkage } from "./versions";
 
 export const DEFAULT_SEARCH_LIMIT = 8;
 export const MAX_SEARCH_LIMIT = 20;
@@ -53,6 +54,14 @@ export type SearchOptions = SearchFilters & {
    */
   minSimilarity?: number;
   /**
+   * Chunks of different regulations, enacted on different days, whose texts
+   * are at least this similar (0 to 1) are listed together: the most recent
+   * leads, with the others under it. `null` lists every chunk on its own.
+   */
+  versionSimilarity?: number | null;
+  /** To which member of a group a chunk is compared; see `VersionLinkage`. */
+  versionLinkage?: VersionLinkage;
+  /**
    * Regulations the question cites by number. Their chunks come first,
    * whatever the similarity search finds. `searchChunks` fills this in.
    */
@@ -78,6 +87,32 @@ export const isCloseEnough = (
   minSimilarity: number,
 ) => hit.match === "reference" || hit.similarity >= minSimilarity;
 
+/**
+ * Best first. The database already returns the rows by distance; this settles
+ * the order of chunks with exactly the same similarity, which the database
+ * leaves open and which changed between the index and the exact scan.
+ */
+export const byRelevance = (
+  a: { similarity: number; chunkId: number },
+  b: { similarity: number; chunkId: number },
+) => b.similarity - a.similarity || a.chunkId - b.chunkId;
+
+/**
+ * Chosen by measuring (docs/evaluacion.md). Linked by chain at 0.95, the latest
+ * issue of a reissued provision leads: recall@1 went from 64% to 82%, while the
+ * questions that ask for an earlier issue were found as often as before. Linked
+ * by the best chunk of each group, the same threshold cut a series into several
+ * groups and gained half as much.
+ *
+ * `null` turns the grouping off. Run `npm run eval -- --versions-sweep` again
+ * whenever the corpus or the model changes.
+ */
+export const DEFAULT_VERSION_SIMILARITY: number | null = 0.95;
+export const DEFAULT_VERSION_LINKAGE: VersionLinkage = "chain";
+
+/** How many chunks are compared when looking for versions of one provision. */
+const VERSION_POOL = 100;
+
 /** Regulations looked up per citation; the most recent ones win. */
 const MAX_REGULATIONS_PER_REFERENCE = 3;
 
@@ -88,6 +123,24 @@ const MAX_REGULATIONS_PER_REFERENCE = 3;
  */
 export const DEFAULT_EF_SEARCH = 100;
 export const MAX_EF_SEARCH = 1000;
+
+/**
+ * An older regulation with nearly the same text as a search result. It says
+ * the texts are alike, not that the newer one replaced it: the dataset does not
+ * tell which regulation repealed which.
+ */
+export type EarlierVersion = {
+  chunkId: number;
+  regulationId: number;
+  /** "Decreto 294/2025". */
+  name: string;
+  enactedOn: string | null;
+  url: string;
+  /** Similarity with the question. */
+  similarity: number;
+  /** Similarity between its text and the text of the result it sits under. */
+  textSimilarity: number;
+};
 
 export type SearchHit = {
   chunkId: number;
@@ -101,6 +154,11 @@ export type SearchHit = {
   section: string;
   label: string | null;
   content: string;
+  /**
+   * Older regulations with the same provision, most recent first. Empty unless
+   * versions are being grouped.
+   */
+  earlierVersions: EarlierVersion[];
   regulation: {
     id: number;
     type: string;
@@ -174,6 +232,21 @@ export async function searchByVector(
   if (!(minSimilarity >= 0 && minSimilarity <= 1)) {
     throw new RangeError(`minSimilarity must be between 0 and 1, got ${minSimilarity}`);
   }
+
+  const versionSimilarity =
+    options.versionSimilarity === undefined
+      ? DEFAULT_VERSION_SIMILARITY
+      : options.versionSimilarity;
+  if (
+    versionSimilarity !== null &&
+    !(versionSimilarity > 0 && versionSimilarity <= 1)
+  ) {
+    throw new RangeError(
+      `versionSimilarity must be above 0 and at most 1, got ${versionSimilarity}`,
+    );
+  }
+  // Versions of a provision sit a few places apart: look further than `limit`.
+  const pool = versionSimilarity === null ? limit : Math.max(limit, VERSION_POOL);
 
   const efSearch = options.efSearch ?? DEFAULT_EF_SEARCH;
   if (!Number.isInteger(efSearch) || efSearch < 1 || efSearch > MAX_EF_SEARCH) {
@@ -289,19 +362,25 @@ export async function searchByVector(
       await tx.execute(sql.raw(`set local hnsw.ef_search = ${efSearch}`));
     }
 
-    const semantic = await selectHits([], sql`${distance}`, limit);
+    const semantic = await selectHits([], sql`${distance}`, pool);
 
-    return { cited, semantic };
+    return { cited: cited.sort(byRelevance), semantic: semantic.sort(byRelevance) };
   });
 
   type Row = (typeof semantic)[number];
-  const toHit = (row: Row, match: SearchHit["match"]): SearchHit => ({
+  const urlOf = (row: Row) => row.sourceUrl ?? infolegUrl(row.regulationId);
+  const toHit = (
+    row: Row,
+    match: SearchHit["match"],
+    earlierVersions: EarlierVersion[] = [],
+  ): SearchHit => ({
     chunkId: row.chunkId,
     match,
     similarity: row.similarity,
     section: row.section,
     label: row.label,
     content: row.content,
+    earlierVersions,
     regulation: {
       id: row.regulationId,
       type: row.type,
@@ -311,20 +390,62 @@ export async function searchByVector(
       topic: row.topic,
       enactedOn: row.enactedOn,
       textSource: row.textSource,
-      url: row.sourceUrl ?? infolegUrl(row.regulationId),
+      url: urlOf(row),
     },
   });
 
   // The cited regulation takes at most half of the results; the rest stays
   // open to what the question is about.
   const citedChunks = new Set(cited.map((row) => row.chunkId));
+  const close = semantic.filter(
+    (row) =>
+      !citedChunks.has(row.chunkId) &&
+      isCloseEnough({ match: "semantic", similarity: row.similarity }, minSimilarity),
+  );
 
-  return [
-    ...cited.map((row) => toHit(row, "reference")),
-    ...semantic
-      .filter((row) => !citedChunks.has(row.chunkId))
-      .map((row) => toHit(row, "semantic")),
-  ]
-    .filter((hit) => isCloseEnough(hit, minSimilarity))
-    .slice(0, limit);
+  let semanticHits: SearchHit[];
+  if (versionSimilarity === null || close.length < 2) {
+    semanticHits = close.map((row) => toHit(row, "semantic"));
+  } else {
+    // The vectors are fetched only here: grouping needs to compare the texts
+    // with each other, not with the question.
+    const vectors = new Map(
+      (
+        await db
+          .select({ id: chunks.id, embedding: chunks.embedding })
+          .from(chunks)
+          .where(
+            inArray(
+              chunks.id,
+              close.map((row) => row.chunkId),
+            ),
+          )
+      ).map((row) => [row.id, row.embedding ?? []] as const),
+    );
+
+    semanticHits = groupVersions(
+      close.map((row) => ({ ...row, embedding: vectors.get(row.chunkId) ?? [] })),
+      versionSimilarity,
+      options.versionLinkage ?? DEFAULT_VERSION_LINKAGE,
+    ).map(({ leader, others }) =>
+      toHit(
+        leader,
+        "semantic",
+        others.map(({ item, textSimilarity }) => ({
+          chunkId: item.chunkId,
+          regulationId: item.regulationId,
+          name: regulationName(item),
+          enactedOn: item.enactedOn,
+          url: urlOf(item),
+          similarity: item.similarity,
+          textSimilarity,
+        })),
+      ),
+    );
+  }
+
+  return [...cited.map((row) => toHit(row, "reference")), ...semanticHits].slice(
+    0,
+    limit,
+  );
 }

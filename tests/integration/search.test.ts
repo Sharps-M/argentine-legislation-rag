@@ -186,8 +186,14 @@ describe("semantic search", () => {
   const embedder = createHashingEmbedder();
   // The stand-in model scores far lower than the real one, so these tests turn
   // the similarity floor off unless they are about it.
+  // The floor and the grouping have their own tests below; everywhere else
+  // the search is checked without them.
   const search = (query: string, options = {}) =>
-    searchChunks(db, embedder, query, { minSimilarity: 0, ...options });
+    searchChunks(db, embedder, query, {
+      minSimilarity: 0,
+      versionSimilarity: null,
+      ...options,
+    });
 
   beforeEach(async () => {
     await embedAll();
@@ -386,6 +392,120 @@ describe("semantic search", () => {
         RangeError,
       );
       await expect(search(question, { minSimilarity: -0.1 })).rejects.toThrow(
+        RangeError,
+      );
+    });
+  });
+
+  describe("versions of the same provision", () => {
+    // Long enough for the amount, the only thing that changes, to weigh little.
+    const article = [
+      "Fíjase el adicional por prestación de servicios en la Antártida para el personal militar",
+      "de las Fuerzas Armadas destinado en las bases, refugios y buques que operan al sur del",
+      "paralelo sesenta, que se liquidará mensualmente mientras dure la comisión y no se computará",
+      "para el cálculo de ningún otro suplemento, compensación o bonificación, en la suma de pesos",
+    ].join(" ");
+
+    beforeEach(async () => {
+      // The same article, reissued three times with another amount.
+      await db.insert(regulations).values(
+        [
+          { id: 500001, number: "294", enactedOn: "2025-04-25" },
+          { id: 500002, number: "578", enactedOn: "2025-08-14" },
+          { id: 500003, number: "834", enactedOn: "2026-08-28" },
+        ].map((row) => ({
+          ...row,
+          type: "Decreto",
+          topic: "ADMINISTRACION PUBLICA NACIONAL",
+          title: "RETRIBUCIONES Y ADICIONALES",
+        })),
+      );
+      await db.insert(chunks).values(
+        [
+          [500001, "un millón"],
+          [500002, "un millón doscientos mil"],
+          [500003, "un millón quinientos mil"],
+        ].map(([regulationId, amount]) => ({
+          regulationId: Number(regulationId),
+          ordinal: 0,
+          section: "article",
+          label: "Artículo 5",
+          content: `${article} ${amount}.`,
+        })),
+      );
+      await embedAll();
+    });
+
+    const question = "adicional por servicios en la Antártida para el personal militar";
+
+    it("lists every regulation on its own when the grouping is off", async () => {
+      const hits = await search(question, { limit: 3, versionSimilarity: null });
+
+      expect(hits.map((hit) => hit.regulation.id).sort()).toEqual([
+        500001, 500002, 500003,
+      ]);
+      expect(hits.every((hit) => hit.earlierVersions.length === 0)).toBe(true);
+    });
+
+    it("groups them by default", async () => {
+      const [first] = await searchChunks(db, embedder, question, { minSimilarity: 0 });
+
+      expect(first?.regulation.name).toBe("Decreto 834/2026");
+      expect(first?.earlierVersions.map((version) => version.name)).toEqual([
+        "Decreto 578/2025",
+        "Decreto 294/2025",
+      ]);
+    });
+
+    it("groups them when asked: the most recent leads, the others go under it", async () => {
+      const [first, second] = await search(question, { versionSimilarity: 0.9 });
+
+      expect(first?.regulation.name).toBe("Decreto 834/2026");
+      expect(first?.earlierVersions.map((version) => version.name)).toEqual([
+        "Decreto 578/2025",
+        "Decreto 294/2025",
+      ]);
+      for (const version of first?.earlierVersions ?? []) {
+        expect(version.textSimilarity).toBeGreaterThanOrEqual(0.9);
+        expect(version.url).toBe(infolegUrl(version.regulationId));
+      }
+      // The next result is another subject, not an older version.
+      expect(second?.regulation.id).not.toBe(500001);
+      expect(second?.regulation.id).not.toBe(500002);
+    });
+
+    it("groups them the same way when linking by chain", async () => {
+      const [first] = await search(question, {
+        versionSimilarity: 0.9,
+        versionLinkage: "chain",
+      });
+
+      expect(first?.regulation.name).toBe("Decreto 834/2026");
+      expect(first?.earlierVersions.map((version) => version.name)).toEqual([
+        "Decreto 578/2025",
+        "Decreto 294/2025",
+      ]);
+    });
+
+    it("leaves different texts apart", async () => {
+      const hits = await search(question, { versionSimilarity: 0.9 });
+      const law = hits.find((hit) => hit.regulation.id === 427766);
+
+      expect(law?.earlierVersions).toEqual([]);
+    });
+
+    it("looks further than the limit to find the version in force", async () => {
+      const [only] = await search(question, { versionSimilarity: 0.9, limit: 1 });
+
+      expect(only?.regulation.name).toBe("Decreto 834/2026");
+      expect(only?.earlierVersions).toHaveLength(2);
+    });
+
+    it("rejects a threshold outside 0 to 1", async () => {
+      await expect(search(question, { versionSimilarity: 0 })).rejects.toThrow(
+        RangeError,
+      );
+      await expect(search(question, { versionSimilarity: 1.2 })).rejects.toThrow(
         RangeError,
       );
     });

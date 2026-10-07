@@ -6,7 +6,13 @@ import { getEmbedder } from "../ai/embedder";
 import { createDb } from "../db/client";
 import { getEnv } from "../env";
 import { parseSearchParams } from "./params";
-import { DEFAULT_MIN_SIMILARITY, QueryEmbeddingError, searchChunks } from "./search";
+import {
+  DEFAULT_MIN_SIMILARITY,
+  DEFAULT_VERSION_LINKAGE,
+  DEFAULT_VERSION_SIMILARITY,
+  QueryEmbeddingError,
+  searchChunks,
+} from "./search";
 
 const HELP = `
 Usage: npm run search -- "<question>" [options]
@@ -24,6 +30,13 @@ Options:
   --min-similarity <0-1>
                   How close a chunk must be to count (default: ${DEFAULT_MIN_SIMILARITY});
                   0 shows the nearest chunks however far they are
+  --versions <0-1|off>
+                  List together the chunks of different regulations whose texts
+                  are this similar, newest first (default: ${DEFAULT_VERSION_SIMILARITY ?? "off"});
+                  "off" lists every chunk on its own
+  --versions-link <best|chain>
+                  Compare each chunk with the best one of its group, or with any
+                  of its members (default: ${DEFAULT_VERSION_LINKAGE})
   --json          Print the results as JSON
   --help          Show this message
 
@@ -46,6 +59,8 @@ async function main() {
       from: { type: "string" },
       to: { type: "string" },
       "min-similarity": { type: "string" },
+      versions: { type: "string" },
+      "versions-link": { type: "string" },
       json: { type: "boolean", default: false },
       help: { type: "boolean", default: false },
     },
@@ -62,6 +77,7 @@ async function main() {
   if (values.from) params.set("from", values.from);
   if (values.to) params.set("to", values.to);
   if (values["min-similarity"]) params.set("min_similarity", values["min-similarity"]);
+  if (values.versions) params.set("versions", values.versions);
   for (const type of values.type ?? []) params.append("type", type);
 
   const request = parseSearchParams(params);
@@ -72,12 +88,26 @@ async function main() {
     return;
   }
 
+  const versionLinkage = values["versions-link"];
+  if (
+    versionLinkage !== undefined &&
+    versionLinkage !== "best" &&
+    versionLinkage !== "chain"
+  ) {
+    console.error(`--versions-link must be "best" or "chain", got "${versionLinkage}"`);
+    process.exitCode = 1;
+    return;
+  }
+
   const sql = postgres(getEnv().DATABASE_URL, { max: 1 });
 
   try {
     const db = createDb(sql);
     const embedder = getEmbedder();
-    const hits = await searchChunks(db, embedder, request.query, request.options);
+    const hits = await searchChunks(db, embedder, request.query, {
+      ...request.options,
+      ...(versionLinkage !== undefined && { versionLinkage }),
+    });
 
     if (values.json) {
       console.log(JSON.stringify(hits, null, 2));
@@ -113,6 +143,12 @@ async function main() {
       if (regulation.title) console.log(`    ${snippet(regulation.title, 100)}`);
       console.log(`    ${snippet(hit.content)}`);
       console.log(`    ${regulation.url}`);
+      if (hit.earlierVersions.length > 0) {
+        const names = hit.earlierVersions.map((version) => version.name);
+        console.log(
+          `    + ${names.length} earlier with nearly the same text: ${names.slice(0, 6).join(", ")}${names.length > 6 ? "…" : ""}`,
+        );
+      }
     });
   } finally {
     await sql.end();

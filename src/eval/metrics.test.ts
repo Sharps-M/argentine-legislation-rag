@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluate, firstRelevantRank, meanReciprocalRank, recallAtK } from "./metrics";
+import {
+  evaluate,
+  firstNestedRank,
+  firstRelevantRank,
+  isUnderNewer,
+  meanReciprocalRank,
+  recallAtK,
+} from "./metrics";
 import type { GoldQuestion } from "./questions";
 
 describe("firstRelevantRank", () => {
@@ -16,6 +23,35 @@ describe("firstRelevantRank", () => {
   it("returns null when none was retrieved", () => {
     expect(firstRelevantRank([10, 20], [99])).toBeNull();
     expect(firstRelevantRank([], [99])).toBeNull();
+  });
+});
+
+describe("firstNestedRank", () => {
+  it("returns the position of the first result that lists an expected regulation under it", () => {
+    expect(firstNestedRank([[], [7, 8], [9]], [8])).toBe(2);
+    expect(firstNestedRank([[9], [9]], [9])).toBe(1);
+  });
+
+  it("returns null when no result lists it", () => {
+    expect(firstNestedRank([[], [7]], [8])).toBeNull();
+    expect(firstNestedRank([], [8])).toBeNull();
+  });
+});
+
+describe("isUnderNewer", () => {
+  it("is true when the answer is only listed under another result", () => {
+    expect(isUnderNewer(null, 1)).toBe(true);
+  });
+
+  it("is true when it is listed under a result that comes before its own", () => {
+    expect(isUnderNewer(4, 1)).toBe(true);
+  });
+
+  it("is false when the regulation comes first on its own, or is not listed", () => {
+    expect(isUnderNewer(1, 3)).toBe(false);
+    expect(isUnderNewer(2, 2)).toBe(false);
+    expect(isUnderNewer(2, null)).toBe(false);
+    expect(isUnderNewer(null, null)).toBe(false);
   });
 });
 

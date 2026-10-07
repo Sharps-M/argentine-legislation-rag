@@ -144,16 +144,17 @@ The same search is available over HTTP:
 GET /api/search?q=impuesto a los combustibles&type=Decreto&from=2026&limit=5
 ```
 
-| Parameter        | Meaning                                                   |
-| ---------------- | --------------------------------------------------------- |
-| `q`              | The question, 3 to 500 characters (required)              |
-| `limit`          | Chunks to return, 1 to 20 (default 8)                     |
-| `type`           | Regulation type; repeat or separate with commas           |
-| `from`, `to`     | Range of enactment years                                  |
-| `min_similarity` | How close a chunk must be to count, 0 to 1 (default 0.55) |
+| Parameter        | Meaning                                                                    |
+| ---------------- | -------------------------------------------------------------------------- |
+| `q`              | The question, 3 to 500 characters (required)                               |
+| `limit`          | Chunks to return, 1 to 20 (default 8)                                      |
+| `type`           | Regulation type; repeat or separate with commas                            |
+| `from`, `to`     | Range of enactment years                                                   |
+| `min_similarity` | How close a chunk must be to count, 0 to 1 (default 0.55)                  |
+| `versions`       | How alike two texts must be to be listed together, or `off` (default 0.95) |
 
-It answers `200` with the chunks ordered by similarity, each with its
-regulation and a link to the official text; `400` with the list of problems when
+It answers `200` with the chunks, best first, each with its regulation and a
+link to the official text; `400` with the list of problems when
 the request is invalid; and `503` when the embedding model cannot be reached.
 
 Two searches are combined, the way a legal clerk would work:
@@ -180,6 +181,15 @@ is never left out. The minimum, 0.55, was chosen by measuring: it keeps every
 right answer of the evaluation and rejects its five questions about subjects
 the corpus does not cover.
 
+Some provisions are reissued every few months: each pay decree repeats the same
+article with new amounts. To the model they are one text, so a search returned
+them all a few thousandths apart, last year's often first. Chunks of different
+regulations, enacted on different days, whose texts are nearly identical are
+now listed together: the most recent leads and the others go under it
+(`earlierVersions`), each with its date and link. Nothing is hidden, and nothing
+is claimed beyond "nearly the same text": the dataset does not say which
+regulation repealed which.
+
 ### Measuring the retrieval
 
 ```bash
@@ -195,11 +205,13 @@ yardstick for every later change to chunking, the model or the search.
 `--exact` bypasses the index to tell model misses from index misses,
 `--semantic-only` leaves the lookup by citation out, `--sweep` compares index
 settings against the exact scan, in quality and time, and `--floors` compares
-minimum similarities: answers kept against unrelated results rejected. The set
-includes questions about subjects the corpus does not cover, which must come
-back empty.
+minimum similarities: answers kept against unrelated results rejected.
+`--versions-sweep` compares ways of grouping reissued provisions: what the
+latest issue gains against what an earlier one loses. The set includes
+questions about subjects the corpus does not cover, which must come back empty,
+and questions that ask for an issue that is not the latest of its series.
 
-Measured on the full corpus (34,973 regulations, some 210,000 chunks), 22
+Measured on the full corpus (34,973 regulations, 211,770 chunks), 22
 questions with a known answer, similarity search alone:
 
 | Search                         | recall@1 | recall@5 | MRR  | Time per query |
@@ -215,9 +227,29 @@ questions, about subjects the corpus does not cover, all come back empty.
 
 The same measurements were taken on a corpus a fifth of this size. The index
 setting held; the minimum similarity did not, and had to come down from 0.57 to
-0.55. What the search still gets wrong are decrees reissued every few months
-with near-identical articles, and very broad questions. Every measurement and
-what it led to is logged (in Spanish) in
+0.55.
+
+The grouping of reissued provisions was measured on the whole search (lookup by
+citation, minimum similarity), with the same 22 questions after two of them
+were corrected to accept a later decree that restates their answer:
+
+| Grouping                                | recall@1 | recall@5 | MRR  | Earlier issues, recall@5 |
+| --------------------------------------- | -------- | -------- | ---- | ------------------------ |
+| Off                                     | 64%      | 86%      | 0.75 | 67%                      |
+| 0.95, compared with the group's best    | 73%      | 95%      | 0.83 | 33%                      |
+| 0.95, compared with any member (chosen) | 82%      | 95%      | 0.88 | 67%                      |
+
+The last column is three questions that ask for an issue that is not the latest
+one: they are what the grouping could hurt. Comparing each chunk with the best
+one of its group cut a series into pieces and buried one of those answers;
+linking through any member keeps the series whole and leaves them where they
+were. It costs time: 27 ms per query instead of 9, because a hundred chunks
+are fetched and compared with each other.
+
+What the search still gets wrong are very broad questions ("regulations about
+pets" finds animal-health laws before the pet laws) and questions that single
+out one issue by its date, which the model barely tells apart. Every
+measurement and what it led to is logged (in Spanish) in
 [`docs/evaluacion.md`](docs/evaluacion.md).
 
 ## Scripts
