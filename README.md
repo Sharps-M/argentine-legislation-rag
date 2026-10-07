@@ -31,9 +31,10 @@ QUERY (every question)                                                    ▼
 question ─► embed question ─► nearest chunks ─► build context ─► cited answer
 ```
 
-The AI provider sits behind one interface, so it can be swapped without touching
-the rest of the code. Embeddings run locally with Ollama (`bge-m3`); nothing
-leaves the machine.
+Each AI provider sits behind an interface, so it can be swapped without touching
+the rest of the code. Embeddings run locally with Ollama (`bge-m3`). Answers are
+written by a chain of models: Gemini through its free tier, any other hosted
+service, and a local model as the one that is always there.
 
 ## Tech stack
 
@@ -43,7 +44,7 @@ leaves the machine.
 | Language       | TypeScript (strict, `noUncheckedIndexedAccess`)     |
 | Database       | PostgreSQL 17 with pgvector                         |
 | Data access    | Drizzle ORM and SQL migrations                      |
-| AI             | Vercel AI SDK, Ollama (`bge-m3` embeddings)         |
+| AI             | Vercel AI SDK, Ollama (`bge-m3`), Gemini or local   |
 | Vector search  | pgvector HNSW index, cosine distance                |
 | Validation     | Zod (environment and input)                         |
 | Styling        | Tailwind CSS 4, light and dark themes               |
@@ -190,6 +191,87 @@ now listed together: the most recent leads and the others go under it
 is claimed beyond "nearly the same text": the dataset does not say which
 regulation repealed which.
 
+## Answering
+
+```bash
+npm run ask -- "¿Cuál es el tope de la retribución por servicios extraordinarios?"
+```
+
+`npm run ask` and `GET /api/answer` (same parameters as `/api/search`) answer a
+question from the chunks the search finds. The model gets those chunks,
+numbered, and a short set of rules: use only the sources, put the number of the
+source after every statement (`[1]`), say so when the sources do not answer,
+and never claim a regulation is still in force, which the data does not tell.
+
+The answer comes in Spanish or in English. The page a question comes from says
+which (`lang=es` or `lang=en`); when nobody says, it is guessed from the
+question. That choice is made in code and not left to the model: the rules, the
+labels around the sources and a last line after the question are all written in
+the language of the answer. A small local model writes in the language it is
+spoken to, whatever a rule tells it: asked in Spanish under English rules, it
+answered in English.
+
+The endpoint streams server-sent events, so a reader sees the answer as it is
+written:
+
+| Event     | When                        | Data                                                                                                                    |
+| --------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `sources` | First, always               | The chunks, numbered, each with its regulation, date and link                                                           |
+| `asking`  | Before the text             | The model that is being asked: what a wait is a wait for                                                                |
+| `skipped` | Before the text, if any     | A model that could not answer, why, and how long it was waited for                                                      |
+| `text`    | Many times                  | A piece of the answer                                                                                                   |
+| `done`    | Last, when the answer ended | How it ended, who wrote it, the sources it cites, any citation of a source that does not exist, and where the time went |
+| `error`   | Last, when the model failed | Why: no key, key rejected, usage limit, or model unreachable                                                            |
+
+What makes the answer checkable is done in code, not asked of the model:
+
+- **Nothing found, nothing asked.** When the search returns no chunk, the answer
+  ends as `no_sources` and the model is never called. A model with no sources
+  can only make things up.
+- **Citations are verified.** Every `[n]` in the answer is checked against the
+  sources. A number that points at no source is reported (`unknownCitations`),
+  and an answer that cites nothing is marked `uncited`.
+- **The sources go first.** They are sent before the model is asked, so they
+  reach the reader even if the model then fails.
+
+Who writes the answer is a chain, set up in `.env`:
+
+| Setting                                       | Provider                                                                            |
+| --------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`              | Gemini, with a free key from [Google AI Studio](https://aistudio.google.com/apikey) |
+| `CHAT_BASE_URL`, `CHAT_API_KEY`, `CHAT_MODEL` | Any service that speaks OpenAI's API: Groq, OpenRouter, Cerebras...                 |
+| `OLLAMA_CHAT_MODEL`                           | A model on the local Ollama (`ollama pull gemma3:4b`)                               |
+| `CHAT_PROVIDER`                               | Which of them to use, and in what order; all of them by default                     |
+
+A free tier comes with no promise of capacity: the first real question got
+"this model is currently experiencing high demand". So no answer depends on one
+model. Every provider that is configured is tried in order, each with its own
+list of models: Gemini's lightest Flash first, then two bigger ones; then the
+OpenAI-compatible service; and last the local model, which writes worse and is
+always there. When a model cannot answer, a `skipped` event says which one and
+why, and the next is asked.
+
+The lightest Gemini goes first because of what was measured, not of what was
+expected: on the free tier, the two bigger models did not answer once in
+fourteen tries, and cost up to thirty-two seconds a question before the lightest
+was asked.
+
+Three rules keep the chain honest:
+
+- **Only before the first word.** Half an answer from one model is never
+  continued by another.
+- **A rejected key rules out its provider**, not the others: the next model of
+  the same provider would be refused too.
+- **Silence is a failure.** A model that has not written anything in thirty
+  seconds (three minutes for the local one, which has to be loaded first) is
+  passed over, and so is one that ends without a word.
+
+The answer says who wrote it and where the time went: the search, the first
+word, the total. With Gemini's free tier, the question and the
+chunks are sent to Google, which may use them to improve its products. The
+chunks are public law; the question is whatever the reader types.
+`CHAT_PROVIDER=ollama` keeps both on the machine.
+
 ### Measuring the retrieval
 
 ```bash
@@ -278,6 +360,7 @@ Every measurement and what it led to is logged (in Spanish) in
 | `npm run texts`            | Download, clean and chunk the full texts |
 | `npm run embed`            | Generate the embedding of each chunk     |
 | `npm run search`           | Semantic search from the command line    |
+| `npm run ask`              | Answer a question, citing its sources    |
 | `npm run eval`             | Measure the retrieval (recall@k, MRR)    |
 
 The integration tests empty the tables they use, so they refuse to run against

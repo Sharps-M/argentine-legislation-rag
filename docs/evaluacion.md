@@ -662,3 +662,140 @@ aproximación del índice a la vista, y no cambia ningún recall.
 - Elegir entre ediciones por su fecha: el modelo de lenguaje recibe las fechas
   de cada resultado y de las normas listadas debajo.
 - La pregunta por el Decreto 866/2025.
+
+## Primeras respuestas reales — 7 de octubre de 2026
+
+Tres preguntas con `npm run ask`, con la cadena Gemini → modelo local. No es
+una medición: son tres casos, anotados porque cada uno mostró algo.
+
+| Pregunta                          | Quién respondió         | Búsqueda | Primera palabra | Total  |
+| --------------------------------- | ----------------------- | -------- | --------------- | ------ |
+| Adicional antártico               | `gemma3:4b` (local)     | 4,4 s    | 89,1 s          | 91,6 s |
+| Acta del SINEP del 28 de mayo     | `gemini-3.5-flash-lite` | 14,3 s   | 16,8 s          | 17,3 s |
+| Receta de empanadas (sin fuentes) | nadie                   | 0,9 s    | —               | 0,9 s  |
+
+### A dónde se fue el tiempo de la primera
+
+| Modelo                  | Qué pasó                  | Espera |
+| ----------------------- | ------------------------- | ------ |
+| `gemini-3.8-flash`      | No escribió nada          | 30,0 s |
+| `gemini-3.6-flash`      | Sin capacidad             | 0,7 s  |
+| `gemini-3.5-flash-lite` | No respondió, sin detalle | 0,3 s  |
+| `gemma3:4b`             | Respondió                 | 54 s   |
+
+- El modelo más nuevo aceptó el pedido y no escribió en 30 segundos. Es el caso
+  que el límite de espera existe para cortar.
+- El tercero falló en 0,3 s y la consola no decía por qué. Ahora, cuando el
+  motivo es "no respondió", se muestra el mensaje del proveedor.
+- El modelo local tardó 54 s en empezar: cargarse en memoria y leer las ocho
+  fuentes, de hasta 1.800 caracteres cada una. Escribir la respuesta le llevó
+  2,5 s.
+
+### La búsqueda de 14 segundos
+
+La segunda pregunta tardó 14,3 s en buscar, y la tercera 0,9 s. Entre una y otra
+no cambió nada del buscador. Hipótesis: después de usar `gemma3:4b`, Ollama tuvo
+que volver a cargar `bge-m3` para vectorizar la pregunta, porque los dos no
+entran juntos en 6 GB de memoria de video. No está comprobado; `ollama ps`
+después de una respuesta local lo muestra.
+
+Si se confirma, el respaldo local tiene un costo que no se ve en su propia
+línea: encarece la búsqueda siguiente.
+
+### Lo que respondieron
+
+**El modelo local respondió en inglés** a una pregunta en español. Las
+instrucciones estaban en inglés. Se corrigió en el código (decisión 39).
+
+**El modelo local dio montos verdaderos y una respuesta incompleta.** Cotejé
+los tres montos contra el texto de sus fuentes y coinciden, con sus fechas. Pero:
+
+- El artículo de 2026 fija cuatro valores, uno por mes desde septiembre, y la
+  respuesta dio solo el primero. El de 2023 fija dos, y dio uno. Para quien
+  consulta, "el valor es X" es falso si la norma trae un cronograma.
+- Presentó el monto de 2026 como "inicial" y el de 2024 como "posterior".
+- Copió mal una palabra: "QUINTIENTOS" por "QUINIENTOS".
+
+Ninguno de los tres problemas lo detecta la verificación de citas.
+
+**Gemini eligió bien por fecha.** Para el acta del 28 de mayo citó el Decreto
+565/2026 y no el 833/2026, que la búsqueda había puesto primero con 0,787
+contra 0,781. Es el caso que el modelo de embeddings no distingue y que quedó
+para esta etapa: con las fechas a la vista, el modelo de lenguaje lo resolvió.
+
+**Y después agregó un dato falso**: "el Decreto 565/2026 es el más reciente
+entre las fuentes", con el 833/2026 de agosto entre ellas, y citando las ocho
+fuentes. La verificación de citas no lo detectó, porque todos los números
+existían. Las reglas se cambiaron (decisión 36); que el modelo las cumpla hay
+que volver a mirarlo.
+
+## Segunda ronda de respuestas — 7 de octubre de 2026
+
+Las mismas preguntas, con el idioma resuelto en el código y las reglas nuevas.
+Las tres las respondió `gemini-3.5-flash-lite`.
+
+| Pregunta                       | Idioma  | Búsqueda | Primera palabra | Total  |
+| ------------------------------ | ------- | -------- | --------------- | ------ |
+| Adicional antártico            | Español | 4,4 s    | 24,4 s          | 25,7 s |
+| Acta del SINEP del 28 de mayo  | Español | 0,3 s    | 33,1 s          | 33,3 s |
+| Adicional antártico, en inglés | Inglés  | 0,4 s    | 27,9 s          | 29,0 s |
+
+### Lo que mejoró
+
+- **El idioma.** Dos en español y una en inglés, como se pidió. La respuesta en
+  inglés conservó los nombres de las normas.
+- **Completas.** Las dos del adicional antártico dieron los cuatro valores de
+  2026, el de 2024 y los dos de 2023, con la norma más reciente primero. Cotejé
+  los siete montos y las fechas contra el texto de las normas: coinciden.
+  También lo que dice sobre la Ley 23.547, artículos 1 y 5.
+- **La del SINEP, en una oración y con una sola cita**: el Decreto 565/2026.
+  Sin el dato falso sobre "la más reciente" y sin citar las ocho fuentes.
+
+### Lo que sigue mal
+
+- **Palabras mal copiadas.** La respuesta en español escribió "SEISCIENTO" tres
+  veces donde la norma dice "SEISCIENTOS". Las cifras estaban bien. Ahora se
+  piden los montos solo en cifras.
+- **Formato desparejo.** Una usó guiones y otra, negritas y viñetas. Se pide
+  texto simple.
+
+Son tres respuestas leídas a mano. Alcanzan para ver que una regla hizo efecto,
+no para afirmar que lo hace siempre.
+
+### El tiempo se va en los modelos que no responden
+
+Sumando todas las corridas del día, lo que hizo cada modelo de Gemini:
+
+| Modelo                  | Intentos | Respondió | Sin capacidad | En silencio 30 s | Otro fallo |
+| ----------------------- | -------- | --------- | ------------- | ---------------- | ---------- |
+| `gemini-3.8-flash`      | 8        | 0         | 6             | 2                | 0          |
+| `gemini-3.6-flash`      | 6        | 0         | 6             | 0                | 0          |
+| `gemini-3.5-flash-lite` | 5        | 4         | 0             | 0                | 1          |
+
+Queda afuera un intento del modelo liviano, anterior a los tiempos en pantalla,
+que se cortó a mano después de más de un minuto sin salida.
+
+- Los dos modelos grandes no respondieron nunca. Rechazar les llevó entre 0,6 y
+  11,4 segundos; dos veces, el más nuevo se quedó callado hasta el límite de 30.
+- En las tres preguntas de esta ronda se perdieron 19,1 s, 32,0 s y 8,3 s antes
+  de preguntarle al modelo que sí respondió. Él empezó a escribir en 0,9 s,
+  0,8 s y 19,2 s.
+- Pedirle poco razonamiento a Gemini no evitó el silencio del modelo más nuevo.
+
+**Decisión: el modelo liviano pasa a ser el primero** (decisión 38). Es una
+hora de un día y una sola cuenta; el orden queda configurable.
+
+### La búsqueda de 14 segundos, sin resolver
+
+`ollama ps` mostró solo `bge-m3` cargado (664 MB, en la placa de video). En esta
+ronda no se usó el modelo local, así que la hipótesis no se pudo probar. Sí se
+ve otra cosa: la primera búsqueda de cada tanda tarda 4,4 s y las siguientes
+0,3 o 0,4 s. Ollama descarga un modelo a los cinco minutos sin uso, y la
+primera pregunta paga la carga.
+
+### Qué queda
+
+- Probar la hipótesis de la búsqueda lenta: hace falta una respuesta del modelo
+  local seguida de otra pregunta.
+- Una evaluación de respuestas, no solo de búsqueda: tres casos a ojo no
+  alcanzan para saber si una regla del _prompt_ mejora o empeora.

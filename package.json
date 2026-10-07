@@ -19,9 +19,11 @@
     "texts": "tsx --env-file-if-exists=.env src/texts/cli.ts",
     "embed": "tsx --env-file-if-exists=.env src/embeddings/cli.ts",
     "search": "tsx --env-file-if-exists=.env src/search/cli.ts",
+    "ask": "tsx --env-file-if-exists=.env src/answers/cli.ts",
     "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "^4.0.90",
     "@ai-sdk/openai-compatible": "^3.0.62",
     "ai": "^7.0.127",
     "csv-parse": "^7.0.3",
