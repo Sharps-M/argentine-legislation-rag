@@ -341,7 +341,10 @@ export async function searchByVector(
       citedIds.push(...rows.map((row) => row.id));
     }
 
-    const cited =
+    // The cited regulation takes at most half of the results; the rest stays
+    // open to what the question is about.
+    const share = Math.ceil(limit / 2);
+    const closest =
       citedIds.length === 0
         ? []
         : await selectHits(
@@ -349,8 +352,42 @@ export async function searchByVector(
             // "+ 0" keeps the vector index out of this query: the rows are
             // already picked by regulation, and there are only a few of them.
             sql`(${distance}) + 0`,
-            Math.ceil(limit / 2),
+            share,
           );
+
+    // Half of that share is kept for how each regulation begins. "What does
+    // Ley 27818 provide?" has no subject to compare: the closest chunks are the
+    // ones that say "ley" most, the enacting formula and the signatures, and
+    // the articles that answer are left out. Its first articles always answer.
+    const openingCount = Math.floor(share / 2);
+    const openings: (typeof closest)[] = [];
+    if (openingCount > 0) {
+      for (const id of citedIds) {
+        openings.push(
+          await selectHits(
+            [eq(chunks.regulationId, id)],
+            // Articles in their order; for a text with none, however it starts.
+            sql`(${chunks.section} = 'article') desc, ${chunks.ordinal}`,
+            openingCount,
+          ),
+        );
+      }
+    }
+    // One article of each regulation before the second of any.
+    const opening = Array.from({ length: openingCount }, (_, turn) =>
+      openings.flatMap((rows) => rows.slice(turn, turn + 1)),
+    )
+      .flat()
+      .slice(0, openingCount);
+
+    const opens = new Set(opening.map((row) => row.chunkId));
+    const cited = [
+      ...closest
+        .sort(byRelevance)
+        .filter((row) => !opens.has(row.chunkId))
+        .slice(0, share - opening.length),
+      ...opening,
+    ];
 
     // 2. Chunks closest in meaning.
     // An approximate index returns its nearest candidates first and the
@@ -405,8 +442,6 @@ export async function searchByVector(
     },
   });
 
-  // The cited regulation takes at most half of the results; the rest stays
-  // open to what the question is about.
   const citedChunks = new Set(cited.map((row) => row.chunkId));
   const close = semantic.filter(
     (row) =>

@@ -853,3 +853,63 @@ fechas distintas, y el modelo simulado. Falta medir con el corpus real.
   orden.
 - Mascotas: la búsqueda no trae las leyes. Es la pregunta amplia, pendiente.
 - Probar la hipótesis de la búsqueda lenta, que sigue sin resolver.
+
+## Segunda evaluación de respuestas — 7 de octubre de 2026
+
+Con la fecha de la pregunta (decisión 42) y el resultado propio para "las
+fuentes no responden" (decisión 43). Otra vez las seis respuestas fueron de
+`gemini-3.5-flash-lite`, sin saltear modelos: 27,8 s en total.
+
+| Pregunta                              | Antes | Ahora | Al leerla                                            |
+| ------------------------------------- | ----- | ----- | ---------------------------------------------------- |
+| Adicional antártico                   | ok    | ok    | Igual: siete montos de siete                         |
+| Acta del SINEP del 28 de mayo         | ok    | ok    | Bien, y ya no enumera normas anteriores              |
+| Tope de servicios desde junio de 2026 | ok\*  | ok    | **Responde**: $871.825, Decreto 552/2026, artículo 3 |
+| ¿Qué dispone la Ley 27818?            | ok\*  | FAIL  | Dice que las fuentes no responden                    |
+| Tratado con Francia (en inglés)       | ok    | ok    | Bien                                                 |
+| Normativas relacionadas con mascotas  | FAIL  | FAIL  | La búsqueda no trae las leyes                        |
+| Receta de empanadas                   | ok    | ok    | No se consultó ningún modelo                         |
+
+\* Aprobadas por error en la primera ronda.
+
+### Lo que funcionó
+
+- **La fecha de la pregunta.** El artículo 3 del Decreto 552/2026 llegó como
+  fuente 1 y el modelo dio el monto de junio de 2026, cotejado con la fuente.
+  Agregó, sin que se le pidiera, el de junio de 2025 (Decreto 527/2025,
+  $712.961). Es correcto y está fechado, pero sobra: esa edición es otro grupo
+  de la misma serie y entró como fuente por su parecido.
+- **La oración fija.** Las dos veces que no pudo responder, el modelo empezó
+  con "Las fuentes no responden la pregunta." y el informe lo reconoció. En la
+  de mascotas ya no lista las ocho fuentes.
+
+### La Ley 27818 pasó de aprobada a reprobada, y está bien
+
+La respuesta de la primera ronda ya era mala: citaba la fórmula de sanción y el
+artículo de vigencia. Ahora el modelo dice directamente que las fuentes no
+responden, y el informe lo muestra.
+
+La norma estaba entre las fuentes, así que el problema es qué fragmentos de
+ella llegaron. No vi las fuentes de esa corrida; lo deduzco de lo que el modelo
+citó en las dos rondas (la fórmula y el artículo 4) y de los ocho fragmentos de
+la ley: preámbulo, cinco artículos y dos de cierre. La pregunta solo dice "ley"
+y un número, y los cuatro fragmentos más parecidos a eso no son los artículos
+1 y 2.
+
+Cambio: de una norma citada siempre vienen sus primeros artículos
+(decisión 44). Probado con datos de prueba; falta la corrida real.
+
+### 13,7 segundos hasta la primera palabra
+
+La pregunta de mascotas tardó 13,7 s en empezar, sin modelos salteados. En la
+primera ronda había tardado 0,7 s. El informe no separaba la búsqueda del
+modelo, así que no se sabe cuál de los dos esperó. Es el mismo orden que la
+búsqueda de 14 segundos que sigue sin explicar. Se agregó la columna `search`
+para verlo la próxima vez.
+
+### Qué queda
+
+- Repetir `npm run eval:answers` para ver la Ley 27818.
+- `npm run eval`: no se corrió con la regla de las fechas. Hay que ver si la
+  pregunta del tope sube y si alguna otra baja.
+- Mascotas, la pregunta amplia.

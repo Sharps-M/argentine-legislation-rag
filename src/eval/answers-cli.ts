@@ -19,7 +19,7 @@ without reading the answer:
   cites     the answer cites a source of the regulation it should
   lang      it is written in the language of the question
   amounts   the amounts it quotes are in the sources it cites for them
-  time      when the first word came, and the total
+  time      how long the search took, when the first word came, and the total
   model     who wrote it, after how many models were given up on
 
 Each question is a call to a chat model and counts against its quota: that is
@@ -48,6 +48,7 @@ const row = (score: AnswerScore) => {
     (expectsAnswer ? (score.citesExpected ? "yes" : "no") : "—").padEnd(5),
     (score.language.written ?? "—").padEnd(4),
     amounts.padEnd(7),
+    seconds(score.searchMs),
     seconds(score.firstTextMs),
     seconds(score.totalMs),
     ` ${(score.model ?? "—").padEnd(22)}`,
@@ -88,7 +89,7 @@ async function main() {
         `${questions.length} questions, one at a time. Each one is a call to a chat model.\n`,
       );
       console.log(
-        "pass  cites  lang  amounts   first   total   model                   question",
+        "pass  cites  lang  amounts  search   first   total   model                   question",
       );
     }
 

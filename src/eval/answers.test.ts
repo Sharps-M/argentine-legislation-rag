@@ -134,6 +134,7 @@ describe("scoreAnswer", () => {
       amounts: { total: 1, supported: 1, otherSource: 0, notFound: 0 },
       provider: "ollama",
       model: "gemma3:4b",
+      searchMs: 40,
       firstTextMs: 900,
       totalMs: 2500,
     });
@@ -395,7 +396,12 @@ describe("scoreAnswer", () => {
 
       expect(score.outcome).toBe("error");
       expect(score.problems).toEqual(["no model finished an answer: rate_limited"]);
-      expect(score).toMatchObject({ model: null, firstTextMs: null, totalMs: 9000 });
+      expect(score).toMatchObject({
+        model: null,
+        searchMs: 40,
+        firstTextMs: null,
+        totalMs: 9000,
+      });
     });
 
     it("does not judge the piece a model wrote before it failed", () => {

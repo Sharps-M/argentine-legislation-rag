@@ -697,6 +697,135 @@ describe("semantic search", () => {
       expect(hits.filter((hit) => hit.match === "reference")).toHaveLength(2);
     });
 
+    describe("asked only by its number", () => {
+      // The formula and the signatures say "ley" and the number; the articles,
+      // which are the answer, share no word with the question.
+      const law = [
+        [
+          "preamble",
+          null,
+          "Ley 27818. El Senado y Cámara de Diputados sancionan con fuerza de ley",
+        ],
+        [
+          "article",
+          "Artículo 1",
+          "Apruébase el Acuerdo de Conciliación celebrado con Bainbridge.",
+        ],
+        [
+          "article",
+          "Artículo 2",
+          "Apruébase el Acuerdo de Conciliación celebrado con Attestor.",
+        ],
+        [
+          "article",
+          "Artículo 3",
+          "Los pagos serán atendidos con cargo al Servicio de la Deuda.",
+        ],
+        [
+          "article",
+          "Artículo 4",
+          "La presente ley entrará en vigencia el día de su publicación.",
+        ],
+        [
+          "closing",
+          null,
+          "Registrado bajo el número de ley 27818. Qué dispone la ley.",
+        ],
+      ] as const;
+
+      beforeEach(async () => {
+        await db.insert(regulations).values({
+          id: 427187,
+          type: "Ley",
+          number: "27818",
+          enactedOn: "2026-06-24",
+          topic: "ACUERDOS",
+          title: "APROBACION",
+        });
+        await db.insert(chunks).values(
+          law
+            .map(([section, label, content], ordinal) => ({
+              regulationId: 427187,
+              ordinal,
+              section,
+              label,
+              content,
+            }))
+            // Stored out of order: the order of a text is its `ordinal`.
+            .reverse(),
+        );
+        await embedAll();
+      });
+
+      const labels = (hits: Awaited<ReturnType<typeof search>>) =>
+        hits
+          .filter((hit) => hit.match === "reference")
+          .map((hit) => hit.label ?? hit.section);
+
+      it("always brings its first articles", async () => {
+        const cited = labels(await search("¿Qué dispone la Ley 27818?"));
+
+        expect(cited).toHaveLength(4);
+        expect(cited).toContain("Artículo 1");
+        expect(cited).toContain("Artículo 2");
+        // The other half is still what is closest to the question.
+        expect(cited).toContain("closing");
+        expect(cited).toContain("preamble");
+      });
+
+      it("still lists what it brings best first", async () => {
+        const hits = (await search("¿Qué dispone la Ley 27818?")).filter(
+          (hit) => hit.match === "reference",
+        );
+
+        expect(hits.map((hit) => hit.similarity)).toEqual(
+          hits.map((hit) => hit.similarity).sort((a, b) => b - a),
+        );
+      });
+
+      it("does not bring an article twice when it is also among the closest", async () => {
+        const hits = await search("acuerdo de conciliación con Bainbridge, Ley 27818");
+        const cited = labels(hits);
+
+        expect(cited).toHaveLength(4);
+        expect(new Set(cited).size).toBe(4);
+        expect(cited).toContain("Artículo 1");
+        expect(cited).toContain("Artículo 2");
+      });
+
+      it("keeps one place for it on a short list, and none on the shortest", async () => {
+        const four = labels(await search("¿Qué dispone la Ley 27818?", { limit: 4 }));
+        expect(four).toHaveLength(2);
+        expect(four).toContain("Artículo 1");
+        expect(four).not.toContain("Artículo 2");
+
+        const two = labels(await search("¿Qué dispone la Ley 27818?", { limit: 2 }));
+        expect(two).toEqual(["closing"]);
+      });
+
+      it("takes the first article of each regulation cited before the second of any", async () => {
+        const cited = (
+          await search("¿Qué disponen la Ley 27818 y la Ley 27817?")
+        ).filter((hit) => hit.match === "reference");
+        const articles = cited.map((hit) => `${hit.regulation.number} ${hit.label}`);
+
+        expect(cited).toHaveLength(4);
+        expect(articles).toContain("27818 Artículo 1");
+        expect(articles).toContain("27817 Artículo 1");
+        expect(articles).not.toContain("27818 Artículo 2");
+      });
+
+      it("starts from the top of a text that has no articles", async () => {
+        const hits = await search("¿Qué dispone el Decreto 617/2022?");
+
+        expect(hits[0]).toMatchObject({
+          match: "reference",
+          section: "summary",
+          regulation: { id: 300001 },
+        });
+      });
+    });
+
     it("applies the filters to the cited regulation too", async () => {
       const hits = await search("Ley 27817", { types: ["Decreto"] });
 

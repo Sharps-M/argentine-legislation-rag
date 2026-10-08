@@ -62,6 +62,8 @@ export type AnswerScore = {
   skipped: number;
   provider: string | null;
   model: string | null;
+  /** How long the search took: the wait before any model was asked. */
+  searchMs: number | null;
   firstTextMs: number | null;
   totalMs: number | null;
   /** What is wrong with the answer; empty when it passes. */
@@ -186,6 +188,7 @@ export function scoreAnswer(
     skipped: events.filter((event) => event.type === "skipped").length,
     provider: done?.provider ?? null,
     model: done?.model ?? null,
+    searchMs: sources?.searchMs ?? null,
     firstTextMs: timings?.firstTextMs ?? null,
     totalMs: timings?.totalMs ?? null,
     problems,

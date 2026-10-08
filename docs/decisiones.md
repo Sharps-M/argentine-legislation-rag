@@ -763,6 +763,32 @@ estaba la norma esperada.
 otras palabras y lista las fuentes, vuelve a contar como respondida. Un modelo
 chico puede no seguir la regla; hay que mirarlo en cada ronda.
 
+## 44. De una norma citada por su número siempre vienen sus primeros artículos
+
+**Problema**: a "¿Qué dispone la Ley 27818?" el modelo respondió que las fuentes
+no respondían. La ley tiene ocho fragmentos y a la norma citada le corresponden
+cuatro (decisión 27), elegidos por cercanía con la pregunta. Pero la pregunta
+no tiene tema: solo dice "ley" y un número. Los fragmentos que más se le
+parecen son los que más repiten esas palabras: la fórmula de sanción, las
+firmas ("registrado bajo el N° 27818") y el artículo de vigencia. Los artículos
+1 y 2, que aprueban los acuerdos, quedaron afuera.
+**Decisión**: la mitad del lugar de la norma citada se reserva para cómo
+empieza: sus primeros artículos, en el orden del texto. La otra mitad sigue
+siendo lo más cercano a la pregunta. Con ocho resultados son dos y dos.
+**Por qué los primeros artículos**: en una ley o un decreto, el artículo 1 dice
+qué se aprueba, se crea o se modifica. Es la respuesta a "qué dispone" aunque
+no comparta ni una palabra con la pregunta. Si el texto no tiene artículos (un
+resumen), se toma su comienzo.
+**Por qué no todo por orden**: una pregunta con tema ("el adicional antártico
+según el Decreto 834/2026") necesita el artículo 5, no el 1. La mitad por
+cercanía lo sigue trayendo.
+**Varias normas citadas**: primero el artículo 1 de cada una, después el 2.
+**El orden no cambia**: lo que viene de la norma citada se sigue listando de
+más a menos parecido. Cambia qué fragmentos entran, no cómo se ordenan.
+**Límites**: con cuatro resultados o menos queda un solo lugar reservado, y con
+dos, ninguno. Y una norma cuyo artículo 1 es de forma ("apruébase el anexo")
+tiene lo importante en el anexo, que solo entra si se parece a la pregunta.
+
 ---
 
 ## Desarrollo asistido por IA

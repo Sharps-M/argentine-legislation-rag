@@ -163,7 +163,9 @@ Two searches are combined, the way a legal clerk would work:
 - **By citation.** If the question names a regulation ("Ley 27.818",
   "Decreto N° 833/2026", "DNU 70/23"), it is looked up by type, number and
   year, and its chunks go first. This is exact: it does not depend on the model
-  or on the index.
+  or on the index. Its first articles are always among them: "What does Ley
+  27818 provide?" has no subject to compare, and the chunks closest to it are
+  the enacting formula and the signatures.
 - **By meaning.** The question is embedded with the same model and compared by
   cosine distance through an HNSW index. Filters are part of the same SQL
   query, and iterative index scans keep a selective filter from returning fewer
@@ -375,6 +377,7 @@ one at a time, and counts what can be counted without reading the answer:
 | `cites`   | The answer cites a source of the regulation it should      |
 | `lang`    | It is written in the language of the question              |
 | `amounts` | The amounts it quotes are in the sources it cites for them |
+| `search`  | How long the search took, before any model was asked       |
 | `first`   | When the first word came                                   |
 | `model`   | Who wrote it                                               |
 
