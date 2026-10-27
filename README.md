@@ -131,6 +131,50 @@ the model that produced it. Batches are saved as they complete, so the command
 can be stopped and resumed. Changing `EMBEDDING_MODEL` marks every chunk as
 pending again: vectors from different models are never compared.
 
+### Keeping it up to date
+
+```bash
+npm run update -- --status  # how long ago the last update ran, and when the next is due
+npm run update -- --check   # what changed since the last update; writes nothing
+npm run update              # bring the corpus up to date
+npm run update -- --if-due  # the same, only if the last one is a week old or more
+```
+
+InfoLEG publishes the dataset once a month. `npm run update` downloads it only
+if it changed (the server is asked "only if newer", and a file sent again is
+recognised by its hash), adds the new regulations of the corpus and updates the
+ones that changed. For each change it does only what the change asks for:
+
+| What changed                                                          | What is redone                           |
+| --------------------------------------------------------------------- | ---------------------------------------- |
+| A new consolidated text, another regulation amends it, a new abstract | Its page is downloaded again             |
+| Its type, number, date, topic or title, which head each of its chunks | Its vectors, and a summary built from it |
+| It is new                                                             | Its text, its chunks and its vectors     |
+
+Nothing is deleted. If an update cannot finish (Ollama is down, the server
+refuses the pages), what it found is written to `data/updates/unfinished.json`
+and the next run does it, even if the dataset has not changed again. Each run
+leaves its report in `data/updates/`, and is recorded in the database, finished
+or not: the footer of the page says how long ago the regulations were updated,
+and turns into a warning when the last attempt failed or two weeks went by
+without one.
+
+To check every day on Windows, with the project in WSL, create a task in the
+Task Scheduler (daily, at a time the computer is usually on) whose action is:
+
+```text
+Program:   wsl.exe
+Arguments: -e bash -lc "bash /mnt/c/path/to/argentine-legislation-rag/scripts/scheduled-update.sh"
+```
+
+The script starts the database container and runs `npm run update -- --if-due`:
+each day it writes how long ago the last update was to `data/updates/update.log`,
+and once a week has passed it runs the update. A day the computer is off is
+caught up the next one. Ollama has to be running. On Linux or
+macOS, a cron line does the same: `0 9 * * * bash /path/to/scripts/scheduled-update.sh`.
+Try the command by hand once first: if `npm` is not found, the shell is not
+loading the profile that sets it up (with nvm, use `bash -lic`).
+
 ## Searching
 
 ```bash
@@ -457,6 +501,7 @@ prints every answer to be read.
 | `npm run ingest`           | Load regulations from the InfoLEG data   |
 | `npm run texts`            | Download, clean and chunk the full texts |
 | `npm run embed`            | Generate the embedding of each chunk     |
+| `npm run update`           | Bring the corpus up to date with InfoLEG |
 | `npm run search`           | Semantic search from the command line    |
 | `npm run ask`              | Answer a question, citing its sources    |
 | `npm run eval`             | Measure the retrieval (recall@k, MRR)    |

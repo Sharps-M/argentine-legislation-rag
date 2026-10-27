@@ -924,6 +924,58 @@ habría encontrado: pasa entre React y el navegador.
 con la pregunta, que viene después). No hay tests de navegador en el
 repositorio todavía: los de esta decisión se hicieron con Playwright a mano.
 
+## 49. Una actualización semanal que hace solo lo que cambió
+
+**Problema**: InfoLEG publica el dataset una vez por mes, con normas nuevas y
+cambios en las que ya están: un texto actualizado nuevo, otra norma que la
+modifica. El corpus se cargó una vez a mano y, sin una actualización, envejece.
+**Decisión**: `npm run update` compara el dataset con lo guardado y hace lo que
+cada cambio pide, y nada más.
+
+| Qué cambió                                                                             | Qué se rehace                                  |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| URL del texto original o del actualizado, cantidad de normas que la modifican, resumen | Se vuelve a bajar su página                    |
+| Tipo, número, fecha, tema o título (el encabezado de cada fragmento)                   | Sus vectores, y el texto si es solo un resumen |
+| Es nueva                                                                               | Su texto, sus fragmentos y sus vectores        |
+
+**Por qué semanal si el dataset es mensual**: no se sabe qué día se publica.
+Revisar cada semana cuesta casi nada cuando no cambió: se le pide al servidor
+el archivo "solo si es más nuevo" y, si igual lo manda, se compara su huella
+(SHA-256) con la del anterior. Los mismos bytes no son un dataset nuevo.
+**Lo que no se baja**: las páginas de normas que no cambiaron. Una norma
+modificada se detecta porque sube su cantidad de normas que la modifican, y
+recién ahí se vuelve a pedir su texto, a un pedido por segundo como siempre.
+**Nada se borra**: una norma que sale del dataset, o del recorte (los decretos
+que cumplen cinco años), queda donde está. Borrar normas de un buscador legal
+no es algo que deba hacer un proceso automático.
+**Si se corta a la mitad**: antes de tocar la base, lo que hay que rehacer se
+escribe en `data/updates/unfinished.json`. Si Ollama no está o el servidor
+rechaza las páginas, la próxima corrida lo termina aunque el dataset no haya
+vuelto a cambiar. Sin eso, la norma guardada ya se vería igual al dataset y
+nada diría que su texto quedó viejo. El estado del dataset se guarda al final,
+solo si todo salió bien.
+**Una revisión diaria, una actualización semanal**: el programador corre todos
+los días `npm run update -- --if-due`. El comando compara la fecha de hoy con la
+de la última actualización que terminó: si pasó una semana, actualiza; si no,
+solo escribe hace cuánto fue. Programarlo por día y no por semana hace que un
+día con la computadora apagada no cueste una semana entera: se pone al día al
+siguiente. Y una actualización que falló se reintenta al otro día, porque lo
+que cuenta es la última que terminó.
+**Cada corrida queda en la base** (tabla `update_runs`), terminada o no, con lo
+que encontró o el error. `npm run update -- --status` lo dice, y el pie de la
+página también: "Normas actualizadas hace 3 días", o un aviso si la última
+falló o si pasaron más de catorce días, dos actualizaciones semanales perdidas.
+Se guarda en la base y no en un archivo para que la página lo lea aunque corra
+en otra máquina que el proceso de actualización.
+**Dónde corre**: en la máquina donde están la base y Ollama, con el
+Programador de tareas de Windows (o `cron`) llamando a
+`scripts/scheduled-update.sh`. No puede correr en GitHub Actions ni en otro
+servicio: la base y el modelo de embeddings son locales.
+**Límites**: depende de que el dataset informe los cambios. Si InfoLEG corrige
+el texto de una página sin cambiar nada en el dataset, no se ve. El recorte de
+decretos se calcula cada vez desde la fecha del día; los que salen quedan, los
+que entran se suman.
+
 ---
 
 ## Desarrollo asistido por IA

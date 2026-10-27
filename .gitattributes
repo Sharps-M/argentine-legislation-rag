@@ -1,2 +1,5 @@
 # Fixture pages are kept byte for byte (ISO-8859-1, as served by InfoLEG).
 tests/fixtures/html/*.htm -text
+
+# Shell scripts run in WSL and cron: a Windows line ending breaks them.
+*.sh text eol=lf

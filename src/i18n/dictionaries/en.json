@@ -13,7 +13,11 @@
     "database": "Database",
     "vectorSearch": "Vector search (pgvector)",
     "up": "Available",
-    "down": "Unavailable"
+    "down": "Unavailable",
+    "updated": "Regulations updated {ago}.",
+    "updateFailed": "The last update of the regulations failed {ago}: they may be out of date.",
+    "updateOverdue": "The regulations were last updated {ago}: they may be out of date.",
+    "neverUpdated": "No update of the regulations has run yet."
   },
   "language": {
     "label": "Language",

@@ -13,7 +13,11 @@
     "database": "Base de datos",
     "vectorSearch": "Búsqueda vectorial (pgvector)",
     "up": "Disponible",
-    "down": "No disponible"
+    "down": "No disponible",
+    "updated": "Normas actualizadas {ago}.",
+    "updateFailed": "La última actualización de las normas falló {ago}: pueden no estar al día.",
+    "updateOverdue": "Las normas no se actualizan desde {ago}: pueden no estar al día.",
+    "neverUpdated": "Todavía no corrió ninguna actualización de las normas."
   },
   "language": {
     "label": "Idioma",

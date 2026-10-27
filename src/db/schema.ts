@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -101,3 +102,27 @@ export const chunks = pgTable(
 export type RegulationText = typeof regulationTexts.$inferSelect;
 export type NewRegulationText = typeof regulationTexts.$inferInsert;
 export type ChunkRow = typeof chunks.$inferSelect;
+
+/**
+ * Each run of `npm run update`, whether it finished or not: when the corpus was
+ * last brought up to date, and whether the last attempt failed. The page and
+ * `npm run update -- --status` read it.
+ */
+export const updateRuns = pgTable(
+  "update_runs",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }).notNull(),
+    /** `ok` or `failed`. */
+    outcome: text("outcome").notNull(),
+    /** `null` when it failed before it could tell. */
+    datasetChanged: boolean("dataset_changed"),
+    added: integer("added").notNull().default(0),
+    changed: integer("changed").notNull().default(0),
+    error: text("error"),
+  },
+  (table) => [index("update_runs_finished_at_idx").on(table.finishedAt)],
+);
+
+export type UpdateRunRow = typeof updateRuns.$inferSelect;

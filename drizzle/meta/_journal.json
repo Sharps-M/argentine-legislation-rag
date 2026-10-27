@@ -29,6 +29,13 @@
       "when": 1790979542426,
       "tag": "0003_chunk_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793140547185,
+      "tag": "0004_update_runs",
+      "breakpoints": true
     }
   ]
 }

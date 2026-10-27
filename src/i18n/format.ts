@@ -23,6 +23,10 @@ export const seconds = (ms: number, locale: Locale) =>
     maximumFractionDigits: 1,
   })} s`;
 
+/** 0 → "hoy", 1 → "ayer", 3 → "hace 3 días"; "today", "yesterday", "3 days ago". */
+export const daysAgo = (days: number, locale: Locale) =>
+  new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(-days, "day");
+
 /**
  * "2026-08-28" → "28 de agosto de 2026" / "August 28, 2026". Dates without a
  * time are read in UTC, so that no time zone moves them to the day before.

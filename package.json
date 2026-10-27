@@ -18,6 +18,7 @@
     "ingest": "tsx --env-file-if-exists=.env src/ingest/cli.ts",
     "texts": "tsx --env-file-if-exists=.env src/texts/cli.ts",
     "embed": "tsx --env-file-if-exists=.env src/embeddings/cli.ts",
+    "update": "tsx --env-file-if-exists=.env src/update/cli.ts",
     "search": "tsx --env-file-if-exists=.env src/search/cli.ts",
     "ask": "tsx --env-file-if-exists=.env src/answers/cli.ts",
     "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fill, longDate, plural, seconds } from "./format";
+import { daysAgo, fill, longDate, plural, seconds } from "./format";
 
 describe("fill", () => {
   it("puts each value in its place, as often as it appears", () => {
@@ -34,6 +34,17 @@ describe("seconds", () => {
     expect(seconds(1234, "es")).toBe("1,2 s");
     expect(seconds(1234, "en")).toBe("1.2 s");
     expect(seconds(40, "es")).toBe("0,0 s");
+  });
+});
+
+describe("daysAgo", () => {
+  it("says how long ago, as each language does", () => {
+    expect(daysAgo(0, "es")).toBe("hoy");
+    expect(daysAgo(1, "es")).toBe("ayer");
+    expect(daysAgo(3, "es")).toBe("hace 3 días");
+    expect(daysAgo(0, "en")).toBe("today");
+    expect(daysAgo(1, "en")).toBe("yesterday");
+    expect(daysAgo(15, "en")).toBe("15 days ago");
   });
 });
 
