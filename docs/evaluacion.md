@@ -998,11 +998,41 @@ respuestas que no respondían.
   minutos sin uso y la primera pregunta paga la carga. La de 14,3 s, después de
   una respuesta del modelo local, sigue sin probar: desde entonces el modelo
   local no volvió a responder, porque Gemini contestó todas.
-- **La búsqueda con la regla de las fechas no se midió.** `npm run eval` no se
-  corrió después de la decisión 42. Hay que ver si la pregunta del tope sube al
-  primer puesto y si alguna otra baja.
 - **El texto de la cuarta ronda.** Ver arriba.
 - **El tope de junio** copia entera la lista de exclusiones del artículo.
 - **Siete preguntas** sirven para comparar una ronda con otra, no como medida.
 - **El modelo local** (`gemma3:4b`) no pasó por la evaluación: no se sabe cómo
   responde a estas siete preguntas.
+
+## La búsqueda con la regla de las fechas — 27 de octubre de 2026
+
+`npm run eval`, con las decisiones 42 (fecha de la pregunta) y 44 (primeros
+artículos de la norma citada), contra la confirmación del 7 de octubre:
+
+| Preguntas               | R@1 antes | R@1 ahora | R@3 ahora | R@5 ahora | MRR antes | MRR ahora |
+| ----------------------- | --------- | --------- | --------- | --------- | --------- | --------- |
+| Todas (25)              | 72 %      | **76 %**  | 92 %      | 92 %      | 0,807     | **0,837** |
+| Por tema (16)           | 81 %      | 81 %      | 94 %      | 94 %      | 0,870     | 0,870     |
+| Por número de norma (4) | 100 %     | 100 %     | 100 %     | 100 %     | 1,000     | 1,000     |
+| En inglés (2)           | 50 %      | 50 %      | 100 %     | 100 %     | 0,750     | 0,750     |
+| Edición anterior (3)    | 0 %       | **33 %**  | 67 %      | 67 %      | 0,250     | **0,500** |
+
+Sin respuesta en el corpus: 5 de 5 rechazadas.
+
+- **Cambió una sola pregunta, la que tenía que cambiar.** El tope desde junio
+  de 2026 pasó del puesto 4, con su artículo nombrado debajo del primer
+  resultado, al puesto 1 con 0,726. Toda la diferencia del MRR sale de ahí:
+  de 1/4 a 1, repartido entre 25 preguntas, son las tres centésimas.
+- **Ninguna otra pregunta se movió**, ni por tema ni por número: la regla no
+  cuesta nada donde no hay fechas.
+- **El acta del 28 de mayo sigue en el puesto 2.** La regla actúa dentro de un
+  grupo de reediciones, y ese decreto no está agrupado con el de agosto: sale
+  por su cuenta, a seis milésimas. En la respuesta no importa, porque el
+  modelo recibe las dos y elige por la fecha.
+- **La supresión de la secretaría** sigue fuera de los veinte primeros.
+- **53 ms por pregunta, contra 28.** No se puede atribuir con esta corrida:
+  la regla de las fechas solo lee texto en las tres preguntas que tienen una,
+  y los primeros artículos agregan una consulta en las cuatro que citan una
+  norma. `npm run eval -- --no-dates` separa la primera; la carga del equipo
+  también cuenta, como ya pasó una vez (134 ms en una corrida y 5 ms en la
+  siguiente).
