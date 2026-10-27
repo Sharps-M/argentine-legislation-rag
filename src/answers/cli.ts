@@ -192,6 +192,11 @@ function printer() {
         return;
 
       case "skipped": {
+        // Not asked at all: it failed a moment ago and is being left alone.
+        if (event.resting) {
+          console.log(`  not asked: ${event.message}`);
+          return;
+        }
         // A provider without its settings was never asked: it has no open line.
         const who = waiting ? "" : `  ${event.provider} `;
         console.log(`${who}${REASONS[event.reason]} (${seconds(event.ms)})`);
@@ -200,6 +205,18 @@ function printer() {
         waiting = false;
         return;
       }
+
+      case "rewritten":
+        if (waiting) console.log("the sources found do not answer");
+        waiting = false;
+        console.log(
+          `\nSearched again as: ${event.query} (${seconds(event.ms)})\n${
+            event.found
+              ? "It found other sources:\n"
+              : "It found nothing new: the first answer stands.\n"
+          }`,
+        );
+        return;
 
       case "text":
         if (waiting) {

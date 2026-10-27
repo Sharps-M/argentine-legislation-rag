@@ -60,6 +60,8 @@ export type AnswerScore = {
   unknownCitations: number;
   /** Models given up on before one answered. */
   skipped: number;
+  /** The words the question was searched again with, if the first sources did not answer. */
+  rewritten: string | null;
   provider: string | null;
   model: string | null;
   /** How long the search took: the wait before any model was asked. */
@@ -82,7 +84,9 @@ export function scoreAnswer(
   question: GoldQuestion,
   events: AnswerEvent[],
 ): AnswerScore {
-  const sources = events.find((event) => event.type === "sources");
+  // The last ones: the question may have been searched again.
+  const sources = events.findLast((event) => event.type === "sources");
+  const rewritten = events.find((event) => event.type === "rewritten");
   const done = events.find((event) => event.type === "done");
   const failure = events.find((event) => event.type === "error");
   const answer = events
@@ -186,6 +190,7 @@ export function scoreAnswer(
     amounts,
     unknownCitations,
     skipped: events.filter((event) => event.type === "skipped").length,
+    rewritten: rewritten?.query ?? null,
     provider: done?.provider ?? null,
     model: done?.model ?? null,
     searchMs: sources?.searchMs ?? null,

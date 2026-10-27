@@ -17,6 +17,8 @@ export const formatEvent = (event: AnswerEvent): string => {
  * server-sent events: `sources`, then `text` many times, then `done` or
  * `error`. Before the text, `asking` names each model as it is asked, and
  * `skipped` each one that could not answer, with how long it was waited for.
+ * When the sources found do not answer, `rewritten` says how the question was
+ * searched again and, if that found something, a second `sources` follows.
  * The last event says where the time went.
  *
  * - `400` the request is invalid (the body lists each problem)

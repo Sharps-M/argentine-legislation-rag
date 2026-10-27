@@ -25,6 +25,11 @@ export type ChatPart =
       model: string;
       reason: ChatFailure;
       message: string;
+      /**
+       * It was not asked: it failed a moment ago, for this reason, and is being
+       * left alone for a while.
+       */
+      resting?: true;
     };
 
 /**
@@ -123,7 +128,62 @@ const OF_THE_PROVIDER: ChatFailure[] = ["unauthorized", "not_configured"];
  * - A rejected or missing key rules out the other models of that provider, not
  *   the other providers.
  */
-export function withFallback(models: readonly ChatModel[]): ChatModel {
+/**
+ * How long a model is left alone after it fails, by how it failed. A usage
+ * limit on the free tier is counted per minute; a model with no capacity or no
+ * answer may be back sooner; a rejected key stays rejected until someone
+ * changes it. A provider that is not configured fails at once, without making
+ * anyone wait, so it is not left alone.
+ */
+export const REST_MS: Record<ChatFailure, number> = {
+  rate_limited: 60_000,
+  overloaded: 30_000,
+  unavailable: 30_000,
+  unauthorized: 10 * 60_000,
+  not_configured: 0,
+};
+
+type Rest = { until: number; since: number; reason: ChatFailure };
+
+/**
+ * The models that failed lately and until when they are left alone. One
+ * registry lives as long as the process: every question asked through the
+ * server or the same command shares it.
+ */
+export type ModelRests = {
+  get: (key: string) => Rest | undefined;
+  set: (key: string, rest: Rest) => void;
+  clear: (key: string) => void;
+};
+
+export const createModelRests = (): ModelRests => {
+  const rests = new Map<string, Rest>();
+  return {
+    get: (key) => rests.get(key),
+    set: (key, rest) => rests.set(key, rest),
+    clear: (key) => rests.delete(key),
+  };
+};
+
+/** The one the server and the commands use. */
+const sharedRests = createModelRests();
+
+const keyOf = (model: ChatModel) => `${model.provider}:${model.model}`;
+
+export type FallbackOptions = {
+  /**
+   * Where failures are remembered from one request to the next. Without it,
+   * each chain starts with a clean slate.
+   */
+  rests?: ModelRests;
+  /** A clock in milliseconds; the tests bring their own. */
+  now?: () => number;
+};
+
+export function withFallback(
+  models: readonly ChatModel[],
+  { rests = createModelRests(), now = Date.now }: FallbackOptions = {},
+): ChatModel {
   const [first] = models;
   if (!first) throw new RangeError("withFallback needs at least one model");
   if (models.length === 1) return first;
@@ -138,11 +198,33 @@ export function withFallback(models: readonly ChatModel[]): ChatModel {
       return answering.model;
     },
     async *stream(request) {
-      const failures: { candidate: ChatModel; error: ChatModelError }[] = [];
+      const failures: {
+        candidate: ChatModel;
+        error: ChatModelError;
+        resting?: true;
+      }[] = [];
       const ruledOut = new Set<string>();
 
-      for (const candidate of models) {
+      for (const [index, candidate] of models.entries()) {
         if (ruledOut.has(candidate.provider)) continue;
+
+        // A model that failed a moment ago would most likely fail again, after
+        // making the reader wait. The last one is asked all the same: it is
+        // the only one left.
+        const rest = rests.get(keyOf(candidate));
+        const isLast = index === models.length - 1;
+        if (rest && rest.until > now() && !isLast) {
+          const name = `${candidate.provider} (${candidate.model})`;
+          failures.push({
+            candidate,
+            error: new ChatModelError(
+              rest.reason,
+              `${name} failed ${Math.round((now() - rest.since) / 1000)} s ago; it is left alone for ${Math.ceil((rest.until - now()) / 1000)} s more.`,
+            ),
+            resting: true,
+          });
+          continue;
+        }
 
         // The previous model failed and there is another to ask: say so now,
         // before waiting for it.
@@ -154,6 +236,7 @@ export function withFallback(models: readonly ChatModel[]): ChatModel {
             model: previous.candidate.model,
             reason: previous.error.reason,
             message: previous.error.message,
+            ...(previous.resting ? { resting: true as const } : {}),
           };
         }
 
@@ -165,10 +248,17 @@ export function withFallback(models: readonly ChatModel[]): ChatModel {
             started ||= part.type === "text";
             yield part;
           }
+          rests.clear(keyOf(candidate));
           return;
         } catch (error) {
           if (!(error instanceof ChatModelError) || started) throw error;
           if (OF_THE_PROVIDER.includes(error.reason)) ruledOut.add(candidate.provider);
+          const at = now();
+          rests.set(keyOf(candidate), {
+            since: at,
+            until: at + REST_MS[error.reason],
+            reason: error.reason,
+          });
           failures.push({ candidate, error });
         }
       }
@@ -450,7 +540,10 @@ const offers = (
  */
 export function chatModelFromEnv(
   env: ChatEnv,
-  { lastModelRetries = 2 }: { lastModelRetries?: number } = {},
+  {
+    lastModelRetries = 2,
+    rests,
+  }: { lastModelRetries?: number; rests?: ModelRests } = {},
 ): ChatModel {
   const available = offers(env);
   const explicit = env.CHAT_PROVIDER.length > 0;
@@ -468,8 +561,10 @@ export function chatModelFromEnv(
       // is asked at once. Only the last one is retried.
       create({ maxRetries: index === candidates.length - 1 ? lastModelRetries : 0 }),
     ),
+    { rests },
   );
 }
 
 /** The chat model configured through the environment. */
-export const getChatModel = (): ChatModel => chatModelFromEnv(getEnv());
+export const getChatModel = (): ChatModel =>
+  chatModelFromEnv(getEnv(), { rests: sharedRests });

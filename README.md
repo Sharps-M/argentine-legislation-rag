@@ -223,14 +223,15 @@ answered in English.
 The endpoint streams server-sent events, so a reader sees the answer as it is
 written:
 
-| Event     | When                        | Data                                                                                                                                                          |
-| --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sources` | First, always               | The chunks, numbered, each with its regulation, date and link                                                                                                 |
-| `asking`  | Before the text             | The model that is being asked: what a wait is a wait for                                                                                                      |
-| `skipped` | Before the text, if any     | A model that could not answer, why, and how long it was waited for                                                                                            |
-| `text`    | Many times                  | A piece of the answer                                                                                                                                         |
-| `done`    | Last, when the answer ended | How it ended, who wrote it, the sources it cites, any citation of a source that does not exist, every amount with where it was found, and where the time went |
-| `error`   | Last, when the model failed | Why: no key, key rejected, usage limit, or model unreachable                                                                                                  |
+| Event       | When                         | Data                                                                                                                                                          |
+| ----------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sources`   | First, always                | The chunks, numbered, each with its regulation, date and link                                                                                                 |
+| `asking`    | Before the text              | The model that is being asked: what a wait is a wait for                                                                                                      |
+| `skipped`   | Before the text, if any      | A model that could not answer, why, and how long it was waited for                                                                                            |
+| `text`      | Many times                   | A piece of the answer                                                                                                                                         |
+| `rewritten` | If the sources do not answer | The question as it was searched again, and whether that found new sources (a second `sources` follows)                                                        |
+| `done`      | Last, when the answer ended  | How it ended, who wrote it, the sources it cites, any citation of a source that does not exist, every amount with where it was found, and where the time went |
+| `error`     | Last, when the model failed  | Why: no key, key rejected, usage limit, or model unreachable                                                                                                  |
 
 What makes the answer checkable is done in code, not asked of the model:
 
@@ -244,6 +245,13 @@ What makes the answer checkable is done in code, not asked of the model:
   with one fixed sentence when the sources do not answer the question, and an
   answer that opens with it ends as `not_in_sources`, even if it then lists the
   sources to say what they are about.
+- **One more search, in the words of the law.** People ask about "pets"; the
+  laws say "animals", "dogs", "cruelty". When an answer opens with that
+  sentence, it is held back: the model rewrites the question once in the words
+  a regulation would use, the search runs again, and if it finds new sources
+  the answer starts over with them. Otherwise the first answer stands. The
+  numbers and dates of the question are kept as they were, and it is tried
+  only once. A question that already finds its answer costs nothing more.
 - **Amounts are verified.** Every amount of money in the answer is looked up in
   the sources: it is in the one cited for it, in another one, or in none. A
   figure is the one part of a statement that can be compared without
@@ -274,7 +282,7 @@ expected: on the free tier, the two bigger models did not answer once in
 fourteen tries, and cost up to thirty-two seconds a question before the lightest
 was asked.
 
-Three rules keep the chain honest:
+Four rules keep the chain honest:
 
 - **Only before the first word.** Half an answer from one model is never
   continued by another.
@@ -283,6 +291,11 @@ Three rules keep the chain honest:
 - **Silence is a failure.** A model that has not written anything in thirty
   seconds (three minutes for the local one, which has to be loaded first) is
   passed over, and so is one that ends without a word.
+- **A model that just failed is left alone for a while**: a minute after a
+  usage limit, thirty seconds after no capacity or no answer, ten minutes after
+  a rejected key. Every question asked through the same server or command
+  shares that memory, so one busy model does not make every reader wait for
+  it. The last model of the chain is always asked: there is no one after it.
 
 The answer says who wrote it and where the time went: the search, the first
 word, the total. With Gemini's free tier, the question and the

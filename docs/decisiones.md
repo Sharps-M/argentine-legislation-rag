@@ -789,6 +789,77 @@ más a menos parecido. Cambia qué fragmentos entran, no cómo se ordenan.
 dos, ninguno. Y una norma cuyo artículo 1 es de forma ("apruébase el anexo")
 tiene lo importante en el anexo, que solo entra si se parece a la pregunta.
 
+## 45. Si las fuentes no responden, se busca una vez más con las palabras de la ley
+
+**Problema**: la gente pregunta con sus palabras y las normas usan otras. A
+"normativas relacionadas con mascotas" la búsqueda trae sanidad animal: las
+leyes que responden (malos tratos a los animales, carreras de perros,
+antirrábica) nunca dicen "mascota". El modelo de embeddings no salva esa
+distancia.
+**Opciones**: reescribir todas las preguntas antes de buscar (una llamada más
+al modelo en cada consulta), una lista de sinónimos escrita a mano (gratis,
+pero cubre solo lo que se cargue), dejarlo como está, o reescribir solo cuando
+falla. Se eligió la última.
+**Decisión**: cuando la respuesta empieza con "Las fuentes no responden la
+pregunta." (decisión 43), no se muestra. El modelo reescribe la pregunta con el
+vocabulario de una norma, se busca otra vez y, si aparecen fuentes nuevas, se
+responde con ellas. Si no aparece nada nuevo, queda la primera respuesta.
+**Cómo se sabe a tiempo**: la oración fija va al principio. El texto se retiene
+solo hasta que se sabe si empieza así: una respuesta común se separa en la
+primera palabra y sale sin demora.
+**Lo que se conserva**: los números de norma y las fechas se toman de la
+pregunta original, no de la reescrita, y la respuesta se escribe para la
+pregunta original. La reescritura es siempre en español, el idioma del corpus,
+también para preguntas en inglés.
+**Una sola vez**: si la segunda respuesta tampoco responde, es la definitiva.
+Como mucho son tres llamadas al modelo por pregunta, y solo en las que fallan.
+**Si algo falla en el camino**: sin modelo para reescribir, o sin modelo de
+embeddings para buscar, queda la primera respuesta. Si falla el modelo en la
+segunda respuesta, se informa el error como siempre.
+**Qué se ve**: un evento `rewritten` con la búsqueda nueva y si encontró algo,
+y un segundo `sources` cuando lo hizo.
+**El ejemplo de las instrucciones** es "jubilados", no "mascotas": usar la
+pregunta de la evaluación como ejemplo aprobaría la evaluación sin probar nada.
+**Límites**: la reescritura la hace un modelo, que puede alejarse de lo que se
+preguntó. Una pregunta sobre un tema que el corpus no cubre puede encontrar
+algo parecido en la segunda búsqueda y recibir una respuesta forzada. La
+evaluación de respuestas lo marcaría, pero su pregunta de ese tipo hoy no
+llega al modelo: la búsqueda no trae nada.
+
+## 46. Un modelo que acaba de fallar se deja descansar
+
+**Problema**: la cadena de modelos (decisión 38) arranca de cero en cada
+pregunta. Si un modelo está sin cupo o sin capacidad, cada pregunta lo vuelve a
+probar y espera su error antes de pasar al siguiente. En las primeras rondas reales,
+dos modelos así costaron hasta treinta y dos segundos por pregunta.
+**Decisión**: cuando un modelo falla antes de escribir, se anota hasta cuándo
+dejarlo en paz. Mientras tanto la cadena lo saltea sin preguntarle y lo dice:
+el evento `skipped` lleva `resting: true` y el mensaje cuenta hace cuánto falló
+y cuánto le falta.
+
+| Por qué falló            | Descanso | Razón                                                |
+| ------------------------ | -------- | ---------------------------------------------------- |
+| Sin cupo (429)           | 60 s     | El cupo gratuito se cuenta por minuto                |
+| Sin capacidad (503)      | 30 s     | Suele pasar pronto                                   |
+| No respondió             | 30 s     | Puede haber sido un corte                            |
+| Clave rechazada          | 10 min   | No se arregla sola: alguien tiene que cambiar `.env` |
+| Proveedor sin configurar | 0        | Falla al instante, sin hacer esperar a nadie         |
+
+**Dónde se guarda**: en memoria, en el proceso. Todas las preguntas que pasan
+por el mismo servidor, o por el mismo comando (como las siete de
+`npm run eval:answers`), comparten lo que se aprendió. Al reiniciar se olvida;
+para un solo servidor alcanza y no suma una base de datos ni un servicio.
+**El último siempre se pregunta**: es el respaldo, no hay otro después. Si
+también está descansando, saltearlo sería dejar la pregunta sin respuesta
+seguro.
+**Cuándo se olvida**: cuando el modelo vuelve a responder, o cuando pasa su
+descanso.
+**Qué no cuenta**: un modelo que empezó a escribir y se cortó no se deja
+descansar; ese error llega al lector como siempre.
+**Límites**: los descansos son fijos. La respuesta 429 de Gemini a veces dice
+cuánto esperar, y eso no se lee. Con varios servidores, cada uno aprende por su
+cuenta.
+
 ---
 
 ## Desarrollo asistido por IA

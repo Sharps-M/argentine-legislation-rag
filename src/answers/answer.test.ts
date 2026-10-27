@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import { ChatModelError, type ChatModel, type ChatRequest } from "@/ai/chat";
-import type { SearchHit, SearchOptions } from "@/search/search";
+import {
+  QueryEmbeddingError,
+  type SearchHit,
+  type SearchOptions,
+} from "@/search/search";
 
 import { searchHit } from "../../tests/support/search-hits";
 import { answerQuestion, type AnswerEvent } from "./answer";
 import { instructionsFor } from "./prompt";
+import { REWRITE_INSTRUCTIONS } from "./rewrite";
 
 const collect = async (events: AsyncIterable<AnswerEvent>) => {
   const all: AnswerEvent[] = [];
@@ -330,6 +335,32 @@ describe("answerQuestion", () => {
     expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources", cited: [] });
   });
 
+  it("passes on that a model was not asked because it is resting", async () => {
+    const { search } = fakeSearch(hits);
+    const chat: ChatModel = {
+      provider: "fake",
+      model: "local",
+      async *stream() {
+        yield {
+          type: "skipped",
+          provider: "gemini",
+          model: "busy",
+          reason: "overloaded",
+          message: "gemini (busy) failed 5 s ago",
+          resting: true,
+        };
+        yield { type: "text", text: "Sí [1]." };
+      },
+    };
+
+    const events = await collect(answerQuestion({ search, chat: () => chat }, "¿?"));
+
+    expect(events.find((event) => event.type === "skipped")).toMatchObject({
+      model: "busy",
+      resting: true,
+    });
+  });
+
   it("reports a citation of a source that does not exist", async () => {
     const { search } = fakeSearch(hits);
     const { chat } = fakeChat(["Lo dice [2] y también ", "[7]."]);
@@ -443,5 +474,278 @@ describe("answerQuestion", () => {
 
     expect(requests[0]?.signal).toBe(controller.signal);
     expect(events.map((event) => event.type)).toEqual(["sources", "text"]);
+  });
+});
+
+describe("answerQuestion, when the sources do not answer", () => {
+  const first = [searchHit({ chunkId: 1 }), searchHit({ chunkId: 2 })];
+  const better = [
+    searchHit({
+      chunkId: 7,
+      label: "Artículo 1",
+      content: "Será reprimido el que infligiere malos tratos a los animales.",
+      regulation: { ...searchHit().regulation, id: 153011, name: "Ley 14346" },
+    }),
+  ];
+  const DECLINE =
+    "Las fuentes no responden la pregunta. Tratan sobre otros temas [1, 2].";
+  const REWRITE = "maltrato y crueldad hacia los animales domésticos, perros y gatos";
+
+  /** A chat model that writes one of the given texts per request, in order. */
+  const scriptedChat = (...replies: (string[] | Error)[]) => {
+    const requests: ChatRequest[] = [];
+    const chat: ChatModel = {
+      provider: "fake",
+      model: "fake-model",
+      async *stream(request) {
+        const reply = replies[requests.length];
+        requests.push(request);
+        if (reply instanceof Error) throw reply;
+        yield { type: "asking", provider: "fake", model: "fake-model" };
+        for (const text of reply ?? []) yield { type: "text", text };
+      },
+    };
+    return { chat: () => chat, requests };
+  };
+
+  /** A search that returns the given results, one list per call, in order. */
+  const scriptedSearch = (...results: (SearchHit[] | Error)[]) => {
+    const calls: { query: string; options: SearchOptions }[] = [];
+    return {
+      calls,
+      search: async (query: string, options: SearchOptions) => {
+        const result = results[calls.length] ?? [];
+        calls.push({ query, options });
+        if (result instanceof Error) throw result;
+        return result;
+      },
+    };
+  };
+
+  const texts = (events: AnswerEvent[]) =>
+    events.flatMap((event) => (event.type === "text" ? [event.text] : []));
+
+  it("searches again in the words of the law and answers from what that finds", async () => {
+    const { search, calls } = scriptedSearch(first, better);
+    const { chat, requests } = scriptedChat(
+      [DECLINE.slice(0, 20), DECLINE.slice(20)],
+      // Written in pieces, like everything a model writes.
+      [REWRITE.slice(0, 9), REWRITE.slice(9)],
+      ["La Ley 14346 reprime los malos tratos a los animales [1]."],
+    );
+
+    const events = await collect(
+      answerQuestion({ search, chat }, "Normativas relacionadas con mascotas"),
+    );
+
+    expect(events.map((event) => event.type)).toEqual([
+      "sources",
+      "asking",
+      "rewritten",
+      "sources",
+      "asking",
+      "text",
+      "done",
+    ]);
+    expect(events[2]).toMatchObject({ type: "rewritten", query: REWRITE, found: true });
+    expect(events[3]).toMatchObject({
+      type: "sources",
+      sources: [{ n: 1, chunkId: 7, title: "Ley 14346 · Artículo 1" }],
+    });
+    // What said "the sources do not answer" was never shown.
+    expect(texts(events)).toEqual([
+      "La Ley 14346 reprime los malos tratos a los animales [1].",
+    ]);
+    expect(events.at(-1)).toMatchObject({ outcome: "answered", cited: [1] });
+
+    expect(requests[1]).toMatchObject({
+      instructions: REWRITE_INSTRUCTIONS,
+      prompt: "Normativas relacionadas con mascotas",
+    });
+    expect(requests[2]?.prompt).toContain("malos tratos a los animales");
+    expect(requests[2]?.prompt).toContain("Normativas relacionadas con mascotas");
+    expect(calls.map((call) => call.query)).toEqual([
+      "Normativas relacionadas con mascotas",
+      REWRITE,
+    ]);
+  });
+
+  it("keeps the numbers and dates of the question, whatever the rewrite says", async () => {
+    const { search, calls } = scriptedSearch(first, better);
+    const { chat } = scriptedChat([DECLINE], ["tope de horas extra"], ["Sí [1]."]);
+
+    await collect(
+      answerQuestion(
+        { search, chat },
+        "Tope según el Decreto 552/2026 desde junio de 2026",
+      ),
+    );
+
+    expect(calls[1]?.options).toMatchObject({
+      references: [{ type: "Decreto", number: "552", year: 2026 }],
+      dates: [{ year: 2026, month: 6 }],
+      limit: 8,
+    });
+  });
+
+  it("keeps the first answer when the second search brings nothing new", async () => {
+    const { search, calls } = scriptedSearch(first, [first[1]!]);
+    const { chat, requests } = scriptedChat([DECLINE], [REWRITE]);
+
+    const events = await collect(answerQuestion({ search, chat }, "mascotas"));
+
+    expect(events.map((event) => event.type)).toEqual([
+      "sources",
+      "asking",
+      "rewritten",
+      "text",
+      "done",
+    ]);
+    expect(events[2]).toMatchObject({ found: false });
+    expect(texts(events)).toEqual([DECLINE]);
+    expect(events.at(-1)).toMatchObject({
+      outcome: "not_in_sources",
+      cited: [1, 2],
+      timings: { firstTextMs: expect.any(Number) },
+    });
+    expect(requests).toHaveLength(2);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("does not search again with the question it already searched", async () => {
+    const { search, calls } = scriptedSearch(first, better);
+    const { chat } = scriptedChat([DECLINE], ['"Mascotas."']);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿mascotas?"));
+
+    expect(events.map((event) => event.type)).not.toContain("rewritten");
+    expect(texts(events)).toEqual([DECLINE]);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("keeps the first answer when no model can rewrite the question", async () => {
+    const { search, calls } = scriptedSearch(first, better);
+    const { chat } = scriptedChat(
+      [DECLINE],
+      new ChatModelError("rate_limited", "Too many requests"),
+    );
+
+    const events = await collect(answerQuestion({ search, chat }, "mascotas"));
+
+    expect(texts(events)).toEqual([DECLINE]);
+    expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources" });
+    expect(calls).toHaveLength(1);
+  });
+
+  it("lets any other failure of the rewrite through", async () => {
+    const { search } = scriptedSearch(first, better);
+    const { chat } = scriptedChat([DECLINE], new Error("a bug"));
+
+    await expect(collect(answerQuestion({ search, chat }, "mascotas"))).rejects.toThrow(
+      "a bug",
+    );
+  });
+
+  it("keeps the first answer when the embedding model fails on the second search", async () => {
+    const { search } = scriptedSearch(first, new QueryEmbeddingError("bge-m3", "down"));
+    const { chat } = scriptedChat([DECLINE], [REWRITE]);
+
+    const events = await collect(answerQuestion({ search, chat }, "mascotas"));
+
+    expect(texts(events)).toEqual([DECLINE]);
+    expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources" });
+  });
+
+  it("lets any other failure of the second search through", async () => {
+    const { search } = scriptedSearch(first, new Error("the database is gone"));
+    const { chat } = scriptedChat([DECLINE], [REWRITE]);
+
+    await expect(collect(answerQuestion({ search, chat }, "mascotas"))).rejects.toThrow(
+      "the database is gone",
+    );
+  });
+
+  it("tries only once: a second answer that does not answer is final", async () => {
+    const { search, calls } = scriptedSearch(first, better, better);
+    const { chat, requests } = scriptedChat([DECLINE], [REWRITE], [DECLINE], [REWRITE]);
+
+    const events = await collect(answerQuestion({ search, chat }, "mascotas"));
+
+    expect(texts(events)).toEqual([DECLINE]);
+    expect(events.at(-1)).toMatchObject({ outcome: "not_in_sources" });
+    expect(requests).toHaveLength(3);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("ends with an error when the model fails on the second answer", async () => {
+    const { search } = scriptedSearch(first, better);
+    const { chat } = scriptedChat(
+      [DECLINE],
+      [REWRITE],
+      new ChatModelError("unavailable", "Gone"),
+    );
+
+    const events = await collect(answerQuestion({ search, chat }, "mascotas"));
+
+    expect(events.at(-1)).toMatchObject({ type: "error", reason: "unavailable" });
+    expect(texts(events)).toEqual([]);
+  });
+
+  it("holds back only the beginning of an answer, until it can tell", async () => {
+    const { search, calls } = scriptedSearch(first);
+    const { chat, requests } = scriptedChat([
+      "Las ",
+      "fuentes ",
+      "fijan $907.934 [1]",
+      ".",
+    ]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿Cuál es el tope?"));
+
+    expect(texts(events)).toEqual(["Las fuentes fijan $907.934 [1]", "."]);
+    expect(events.at(-1)).toMatchObject({ outcome: "answered" });
+    expect(requests).toHaveLength(1);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("sends nothing for an answer with no text", async () => {
+    const { search } = scriptedSearch(first);
+    const { chat } = scriptedChat([]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿?"));
+
+    expect(texts(events)).toEqual([]);
+    expect(events.at(-1)).toMatchObject({ outcome: "uncited" });
+  });
+
+  it("sends an answer too short to tell, when it ends", async () => {
+    const { search } = scriptedSearch(first);
+    const { chat } = scriptedChat(["Las fuentes"]);
+
+    const events = await collect(answerQuestion({ search, chat }, "¿?"));
+
+    expect(texts(events)).toEqual(["Las fuentes"]);
+    expect(events.at(-1)).toMatchObject({ outcome: "uncited" });
+  });
+
+  it("times the second search, and the first word from what was shown", async () => {
+    let clock = 0;
+    const now = () => (clock += 10);
+    const { search } = scriptedSearch(first, better);
+    const { chat } = scriptedChat([DECLINE], [REWRITE], ["Sí [1]."]);
+
+    const events = await collect(answerQuestion({ search, chat, now }, "mascotas"));
+    const [, second] = events.filter((event) => event.type === "sources");
+    const rewritten = events.find((event) => event.type === "rewritten");
+    const done = events.at(-1);
+    if (second?.type !== "sources" || rewritten?.type !== "rewritten")
+      throw new Error();
+    if (done?.type !== "done") throw new Error();
+
+    expect(second.searchMs).toBeGreaterThan(0);
+    // Nothing was shown before both searches and the rewrite were over.
+    expect(done.timings.firstTextMs).toBeGreaterThan(
+      done.timings.searchMs + rewritten.ms + second.searchMs,
+    );
   });
 });

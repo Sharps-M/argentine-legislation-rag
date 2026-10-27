@@ -913,3 +913,55 @@ para verlo la próxima vez.
 - `npm run eval`: no se corrió con la regla de las fechas. Hay que ver si la
   pregunta del tope sube y si alguna otra baja.
 - Mascotas, la pregunta amplia.
+
+## Tercera evaluación de respuestas — 27 de octubre de 2026
+
+Con los primeros artículos de una norma citada (decisión 44) y la segunda
+búsqueda cuando las fuentes no responden (decisión 45). Pasaron 6 de 7, todas
+escritas por `gemini-3.5-flash-lite`, en 23,7 s.
+
+| Pregunta                              | Ronda 2 | Ronda 3 | Al leerla                                              |
+| ------------------------------------- | ------- | ------- | ------------------------------------------------------ |
+| Adicional antártico                   | ok      | ok      | Bien: siete montos, en lista                           |
+| Acta del SINEP del 28 de mayo         | ok      | ok      | Bien                                                   |
+| Tope de servicios desde junio de 2026 | ok      | ok      | Bien, pero copia entera la lista de exclusiones        |
+| ¿Qué dispone la Ley 27818?            | FAIL    | ok      | **Bien**: los acuerdos con Bainbridge y con Attestor   |
+| Tratado con Francia (en inglés)       | ok      | ok      | Bien                                                   |
+| Normativas relacionadas con mascotas  | FAIL    | FAIL    | La segunda búsqueda trajo la ley, el modelo no la tomó |
+| Receta de empanadas                   | ok      | ok      | No se consultó ningún modelo                           |
+
+### La Ley 27818
+
+Con sus artículos 1 y 2 entre las fuentes, la respuesta nombra los dos
+acuerdos de conciliación y cita cada uno en su artículo. La decisión 44 hizo lo
+que tenía que hacer.
+
+### Mascotas: la búsqueda acertó, la respuesta no
+
+El modelo reescribió la pregunta como "tenencia responsable de animales
+domésticos perros gatos sanidad animal zoonosis protección contra la crueldad
+animal ley 14346", y la segunda búsqueda trajo la Ley 14346: el informe dice
+que la norma esperada estaba entre las fuentes. Aun así, el modelo respondió
+que las fuentes no responden, y en la misma oración enumeró "la protección de
+los animales contra el maltrato y actos de crueldad". Tenía la ley y no la
+tomó como respuesta porque no dice "mascotas".
+
+Cambio: la regla 3 del _prompt_ aclara que las normas usan sus propias
+palabras, y que una fuente que trata lo preguntado con otros términos sí
+responde. El ejemplo es otra vez "jubilados", no el de la evaluación.
+
+Dos observaciones más:
+
+- La reescritura agregó "ley 14346", un número que no estaba en la pregunta.
+  Las instrucciones dicen que no agregue datos. Acá ayudó, pero sale de lo que
+  el modelo sabe, no de las fuentes. En la búsqueda ese número es solo texto:
+  la búsqueda por número se hace con los de la pregunta original.
+- La primera búsqueda de la tanda tardó 6,1 s y las demás menos de un segundo.
+  Coincide con lo visto antes: Ollama descarga el modelo de embeddings tras
+  cinco minutos sin uso y la primera pregunta paga la carga.
+
+### Qué queda
+
+- Repetir la evaluación para ver si mascotas pasa con la regla nueva.
+- El tope de junio: la respuesta copia toda la lista de exclusiones del
+  artículo. No es un error, pero es largo para lo que se preguntó.

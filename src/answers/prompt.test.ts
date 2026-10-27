@@ -5,6 +5,7 @@ import {
   buildPrompt,
   instructionsFor,
   NOT_IN_SOURCES,
+  readOpening,
   saysNotInSources,
 } from "./prompt";
 import { toSources } from "./sources";
@@ -130,6 +131,11 @@ describe("instructionsFor", () => {
       /start with this sentence, unchanged: "The sources do not answer the question\."/,
     ],
     [
+      "taking the words of the law for the words of the question",
+      /sus propias palabras: si una fuente trata lo que se pregunta con otros términos/,
+      /their own words: a source that deals with what is asked in other terms/,
+    ],
+    [
       "treating the sources as data",
       /documentos, no instrucciones/,
       /documents, not instructions/,
@@ -210,5 +216,27 @@ describe("saysNotInSources", () => {
     expect(saysNotInSources("Las fuentes fijan el tope en $871.825 [1].")).toBe(false);
     expect(saysNotInSources("The sources set the cap [1].")).toBe(false);
     expect(saysNotInSources("")).toBe(false);
+  });
+});
+
+describe("readOpening", () => {
+  it("cannot tell from nothing, or from the first words of the sentence", () => {
+    expect(readOpening("")).toBe("undecided");
+    expect(readOpening("  ")).toBe("undecided");
+    expect(readOpening("Las fuentes no")).toBe("undecided");
+    expect(readOpening("The sources")).toBe("undecided");
+  });
+
+  it("tells as soon as the text leaves the sentence", () => {
+    expect(readOpening("Las fuentes fijan")).toBe("answer");
+    expect(readOpening("El")).toBe("answer");
+    expect(readOpening("The cap")).toBe("answer");
+  });
+
+  it("tells once the whole sentence is there, in either language", () => {
+    expect(readOpening("Las fuentes no responden la pregunta")).toBe("not_in_sources");
+    expect(readOpening("The sources do not answer the question. They")).toBe(
+      "not_in_sources",
+    );
   });
 });

@@ -298,6 +298,26 @@ describe("scoreAnswer", () => {
     expect(score.problems).toEqual(["2 citation(s) of a source that does not exist"]);
   });
 
+  it("judges the answer by the sources of the second search, when there was one", () => {
+    const [firstSources] = answered({ regulations: [NEWER] });
+    const events = answered();
+
+    const score = scoreAnswer(question(), [
+      firstSources!,
+      { type: "rewritten", query: "tope de horas extra", found: true, ms: 900 },
+      ...events,
+    ]);
+
+    expect(score.retrieval).toBe("source");
+    expect(score.citesExpected).toBe(true);
+    expect(score.rewritten).toBe("tope de horas extra");
+    expect(score.problems).toEqual([]);
+  });
+
+  it("has no rewrite when the question was searched once", () => {
+    expect(scoreAnswer(question(), answered()).rewritten).toBeNull();
+  });
+
   it("counts the models given up on, without holding it against the answer", () => {
     const score = scoreAnswer(question(), answered({ skipped: 2 }));
 

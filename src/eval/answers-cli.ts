@@ -111,6 +111,7 @@ async function main() {
       if (values.json) continue;
 
       console.log(row(score));
+      if (score.rewritten) console.log(`      ↻ searched again as: ${score.rewritten}`);
       for (const problem of score.problems) console.log(`      ↳ ${problem}`);
       if (values.verbose && score.answer.trim()) {
         console.log(

@@ -16,6 +16,8 @@ import {
   DEFAULT_OLLAMA_CHAT_MODEL,
   toChatModelError,
   withFallback,
+  createModelRests,
+  REST_MS,
   type ChatFailure,
   type ChatModel,
   type ChatPart,
@@ -442,6 +444,226 @@ describe("withFallback", () => {
   });
 });
 
+describe("withFallback, remembering failures", () => {
+  /** A model that fails, or answers, as many times as it is asked. */
+  const model = (
+    name: string,
+    asked: string[],
+    behaviour: { fails?: ChatFailure; thenFails?: ChatFailure } = {},
+    provider = "fake",
+  ): ChatModel => ({
+    provider,
+    model: name,
+    async *stream() {
+      asked.push(name);
+      if (behaviour.fails) throw new ChatModelError(behaviour.fails, `${name} failed`);
+      yield { type: "text", text: "ok" };
+      if (behaviour.thenFails)
+        throw new ChatModelError(behaviour.thenFails, "broke off");
+    },
+  });
+
+  /** A clock that only moves when told to. */
+  const clock = () => {
+    let time = 1_000_000;
+    return { now: () => time, pass: (ms: number) => (time += ms) };
+  };
+
+  const ask = (chat: ChatModel) => partsOf(chat.stream(request));
+
+  it("does not ask again, for a while, a model that just failed", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now, pass } = clock();
+    const chain = () =>
+      withFallback(
+        [model("busy", asked, { fails: "overloaded" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      );
+
+    await ask(chain());
+    pass(10_000);
+    const parts = await ask(chain());
+
+    expect(asked).toEqual(["busy", "local", "local"]);
+    expect(parts[0]).toEqual({
+      type: "skipped",
+      provider: "fake",
+      model: "busy",
+      reason: "overloaded",
+      message: "fake (busy) failed 10 s ago; it is left alone for 20 s more.",
+      resting: true,
+    });
+  });
+
+  it("asks it again once its rest is over", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now, pass } = clock();
+    const chain = () =>
+      withFallback(
+        [model("busy", asked, { fails: "overloaded" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      );
+
+    await ask(chain());
+    pass(REST_MS.overloaded);
+    await ask(chain());
+
+    expect(asked).toEqual(["busy", "local", "busy", "local"]);
+  });
+
+  it("rests longer after a usage limit than after a busy moment", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now, pass } = clock();
+    const chain = () =>
+      withFallback(
+        [
+          model("limited", asked, { fails: "rate_limited" }),
+          model("busy", asked, { fails: "overloaded" }),
+          model("local", asked),
+        ],
+        { rests, now },
+      );
+
+    await ask(chain());
+    pass(45_000);
+    asked.length = 0;
+    await ask(chain());
+
+    expect(REST_MS.rate_limited).toBeGreaterThan(45_000);
+    expect(REST_MS.overloaded).toBeLessThanOrEqual(45_000);
+    expect(asked).toEqual(["busy", "local"]);
+  });
+
+  it("forgets the failure of a model that answers", async () => {
+    const rests = createModelRests();
+    const { now, pass } = clock();
+    const asked: string[] = [];
+    await ask(
+      withFallback(
+        [model("busy", asked, { fails: "overloaded" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      ),
+    );
+    pass(REST_MS.overloaded);
+
+    await ask(
+      withFallback([model("busy", asked), model("local", asked)], { rests, now }),
+    );
+
+    expect(rests.get("fake:busy")).toBeUndefined();
+  });
+
+  it("always asks the last model, resting or not: there is no one after it", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now } = clock();
+    const chain = () =>
+      withFallback(
+        [
+          model("busy", asked, { fails: "overloaded" }),
+          model("local", asked, { fails: "unavailable" }),
+        ],
+        { rests, now },
+      );
+
+    await failureOf(chain().stream(request));
+    await failureOf(chain().stream(request));
+
+    expect(asked).toEqual(["busy", "local", "local"]);
+  });
+
+  it("does not rest a provider that is not configured: it costs no wait", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now } = clock();
+    const chain = () =>
+      withFallback(
+        [
+          model("missing", asked, { fails: "not_configured" }),
+          model("local", asked, {}, "ollama"),
+        ],
+        { rests, now },
+      );
+
+    await ask(chain());
+    await ask(chain());
+
+    expect(asked).toEqual(["missing", "local", "missing", "local"]);
+  });
+
+  it("does not rest a model that failed after it started writing", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now } = clock();
+    const chain = () =>
+      withFallback(
+        [model("flaky", asked, { thenFails: "unavailable" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      );
+
+    await failureOf(chain().stream(request));
+    await failureOf(chain().stream(request));
+
+    expect(asked).toEqual(["flaky", "flaky"]);
+  });
+
+  it("starts each chain with a clean slate unless they share where failures are kept", async () => {
+    const asked: string[] = [];
+    const chain = () =>
+      withFallback([
+        model("busy", asked, { fails: "overloaded" }),
+        model("local", asked),
+      ]);
+
+    await ask(chain());
+    await ask(chain());
+
+    expect(asked).toEqual(["busy", "local", "busy", "local"]);
+  });
+
+  it("keeps the failures of each model apart", async () => {
+    const asked: string[] = [];
+    const rests = createModelRests();
+    const { now } = clock();
+
+    await ask(
+      withFallback(
+        [model("busy", asked, { fails: "overloaded" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      ),
+    );
+    await ask(
+      withFallback(
+        [model("other", asked, { fails: "overloaded" }), model("local", asked)],
+        {
+          rests,
+          now,
+        },
+      ),
+    );
+
+    expect(asked).toEqual(["busy", "local", "other", "local"]);
+  });
+});
+
 describe("chatModelFromEnv", () => {
   const env = {
     CHAT_PROVIDER: [],
@@ -485,6 +707,20 @@ describe("chatModelFromEnv", () => {
 
     // Starts with Gemini's newest Flash; the rest is checked below, offline.
     expect(chat).toMatchObject({ provider: "gemini", model: DEFAULT_GEMINI_MODELS[0] });
+  });
+
+  it("remembers the failures of its models when given where to keep them", async () => {
+    const rests = createModelRests();
+    const settings = { ...env, ...groq };
+
+    await failureOf(
+      chatModelFromEnv(settings, { lastModelRetries: 0, rests }).stream(request),
+    );
+    const failure = (await failureOf(
+      chatModelFromEnv(settings, { lastModelRetries: 0, rests }).stream(request),
+    )) as Error;
+
+    expect(failure.message).toMatch(/^127\.0\.0\.1 \(gpt-oss\) failed \d+ s ago/);
   });
 
   it("leaves out, without a word, a hosted provider that is not configured", async () => {
