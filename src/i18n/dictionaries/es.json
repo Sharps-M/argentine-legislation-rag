@@ -6,7 +6,6 @@
   "home": {
     "tagline": "Buscador semántico de normativa nacional argentina",
     "intro": "Pregunte en lenguaje natural y reciba una respuesta con citas a la norma de origen.",
-    "comingSoon": "La búsqueda todavía no está disponible: el proyecto está en construcción.",
     "disclaimer": "No es asesoramiento legal. Consulte siempre el texto oficial."
   },
   "status": {
@@ -20,5 +19,65 @@
     "label": "Idioma",
     "es": "Español",
     "en": "English"
+  },
+  "ask": {
+    "label": "Pregunta",
+    "placeholder": "Por ejemplo: ¿cuál es el tope de la retribución por servicios extraordinarios?",
+    "submit": "Preguntar",
+    "stop": "Detener",
+    "tooShort": "Escriba al menos 3 caracteres.",
+    "examples": "Para probar:",
+    "exampleQuestions": [
+      "¿Cuál es el tope de la retribución por servicios extraordinarios?",
+      "Adicional por servicios en la Antártida para el personal militar",
+      "¿Qué dispone la Ley 27818?"
+    ],
+    "searching": "Buscando normas…",
+    "asking": "Consultando a {model}…",
+    "skipped": "{model} {reason} ({seconds}).",
+    "resting": "No se consultó a {model}: falló hace un momento.",
+    "reasons": {
+      "not_configured": "no está configurado",
+      "unauthorized": "rechazó la clave",
+      "rate_limited": "no tiene cupo",
+      "overloaded": "no tiene capacidad",
+      "unavailable": "no respondió"
+    },
+    "rewritten": "Las normas encontradas no respondían. Se buscó de nuevo como: «{query}».",
+    "rewrittenNothing": "La nueva búsqueda no trajo normas distintas.",
+    "stopped": "Se detuvo la respuesta.",
+    "answerHeading": "Respuesta",
+    "sourcesHeading": "Fuentes",
+    "outcome": {
+      "not_in_sources": "Las normas encontradas no responden la pregunta. Revise las fuentes o pruebe con otras palabras.",
+      "uncited": "Esta respuesta no cita ninguna fuente: no se puede verificar.",
+      "no_sources": "No se encontraron normas cercanas a la pregunta. Pruebe con otras palabras."
+    },
+    "unknownCitation": "La fuente {n} no existe: el modelo la citó por error.",
+    "amount": {
+      "other_source": "Este monto figura en otra de las fuentes, no en la citada.",
+      "not_found": "Este monto no figura en ninguna de las fuentes."
+    },
+    "amountsWarning": {
+      "one": "Un monto no coincide con la fuente que cita. Está marcado en el texto.",
+      "other": "{count} montos no coinciden con la fuente que citan. Están marcados en el texto."
+    },
+    "writtenBy": "Respuesta de {provider} · {model}",
+    "timings": "Búsqueda {search} · primera palabra {first} · total {total}",
+    "failure": {
+      "invalid": "La pregunta no es válida: debe tener entre 3 y 500 caracteres.",
+      "rateLimitedClient": "Hizo muchas preguntas en el último minuto. Pruebe de nuevo en {seconds} s.",
+      "rateLimitedTotal": "El servicio está respondiendo muchas preguntas. Pruebe de nuevo en {seconds} s.",
+      "searchUnavailable": "La búsqueda no está disponible en este momento.",
+      "model": "Ningún modelo pudo responder: el último {reason}. Las normas encontradas están abajo.",
+      "network": "No se pudo completar la respuesta. Revise la conexión y pruebe de nuevo."
+    },
+    "source": {
+      "enacted": "Dictada el {date}",
+      "abstractOnly": "Solo resumen: el texto completo no está publicado.",
+      "showText": "Ver el fragmento",
+      "earlier": "Normas anteriores con un texto casi idéntico:",
+      "older": "y {count} más antiguas"
+    }
   }
 }

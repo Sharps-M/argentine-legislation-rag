@@ -313,6 +313,31 @@ chunks are sent to Google, which may use them to improve its products. The
 chunks are public law; the question is whatever the reader types.
 `CHAT_PROVIDER=ollama` keeps both on the machine.
 
+### The screen
+
+`npm run dev` and open `http://localhost:3000`: the home page, in Spanish
+(`/es`) or English (`/en`), takes a question and shows the answer as it is
+written, from the same events.
+
+- **The language of the page is the language of the answer**: it is sent as
+  `lang`.
+- **The sources come first**, numbered, each with its date, its subject, the
+  passage and a link to the official text. Once the answer ends, the sources it
+  does not cite are dimmed.
+- **Citations are links** to their source; a number that points at no source
+  is shown in red.
+- **An amount that did not check out is marked** in the text, with what was
+  wrong: in another source, or in none.
+- **What is being waited for is said**: the search, the model being asked, the
+  models passed over and why, the second search.
+- **It can be stopped**, and leaving the page stops it too: no quota is spent
+  on an answer nobody reads. The limits per minute come back as a message with
+  the seconds to wait.
+
+The events are read with `fetch`, not `EventSource`: `EventSource` reconnects
+on its own when a stream ends, which here would ask the model again, and it
+cannot read the body of a `429`.
+
 ### Measuring the retrieval
 
 ```bash
@@ -460,6 +485,7 @@ npm run db:migrate && npm run test:integration
       citations and amounts checked in code, a second search in the words of the
       law, rate limits and an answer evaluation
 - [ ] **6. Interface** — search screen with linked citations and filters
+      (the answer screen is built; filters and shareable links come next)
 - [ ] **7. Release** — screenshots, architecture notes and a public demo
 
 ## Data source and disclaimer

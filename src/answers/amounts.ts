@@ -6,6 +6,13 @@ import type { AnswerSource } from "./sources";
 const AMOUNT =
   /(?:U\$S|US\$|USD|\$)\s*(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?)/g;
 
+/**
+ * The same pattern, new each time (a global pattern keeps its position), for
+ * whoever has to find the amounts where this module found them: the screen
+ * marks the ones that did not check out.
+ */
+export const amountPattern = () => new RegExp(AMOUNT.source, "g");
+
 // The citations that come right after a statement: "[1]", "[1][3]", "[1, 3]".
 const NEXT_CITATIONS = /(?:\[\d{1,3}(?:\s*,\s*\d{1,3})*\]\s*)+/;
 

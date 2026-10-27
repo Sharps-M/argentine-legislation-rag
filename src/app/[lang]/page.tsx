@@ -7,6 +7,8 @@ import { getDictionary } from "@/i18n/dictionaries";
 import { checkHealth } from "@/server/health";
 import { databaseProbe } from "@/server/health-probe";
 
+import { Ask } from "./ask";
+
 export default async function HomePage({ params }: PageProps<"/[lang]">) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
@@ -23,7 +25,7 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-10 px-6 py-16">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-16">
       <header className="flex items-start justify-between gap-6">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">{dict.meta.title}</h1>
@@ -45,34 +47,31 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
         </nav>
       </header>
 
-      <section className="space-y-3">
-        <p>{dict.home.intro}</p>
-        <p className="text-muted">{dict.home.comingSoon}</p>
-      </section>
+      <p>{dict.home.intro}</p>
 
-      <section
-        aria-labelledby="status-heading"
-        className="rounded-xl border border-border bg-surface p-5"
-      >
-        <h2 id="status-heading" className="text-sm font-semibold">
-          {dict.status.heading}
-        </h2>
-        <ul className="mt-3 space-y-2 text-sm">
-          {checks.map((check) => (
-            <li key={check.label} className="flex items-center justify-between">
-              <span>{check.label}</span>
-              <span
-                className={check.ok ? "text-success" : "text-danger"}
-                data-status={check.ok ? "up" : "down"}
-              >
-                {check.ok ? dict.status.up : dict.status.down}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <Ask lang={lang} texts={dict.ask} />
 
-      <footer className="mt-auto text-sm text-muted">{dict.home.disclaimer}</footer>
+      <footer className="mt-auto space-y-3 border-t border-border pt-6 text-sm text-muted">
+        <p>{dict.home.disclaimer}</p>
+        <section aria-labelledby="status-heading">
+          <h2 id="status-heading" className="sr-only">
+            {dict.status.heading}
+          </h2>
+          <ul className="flex flex-wrap gap-x-6 gap-y-1">
+            {checks.map((check) => (
+              <li key={check.label}>
+                {check.label}:{" "}
+                <span
+                  className={check.ok ? "text-success" : "text-danger"}
+                  data-status={check.ok ? "up" : "down"}
+                >
+                  {check.ok ? dict.status.up : dict.status.down}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </footer>
     </main>
   );
 }

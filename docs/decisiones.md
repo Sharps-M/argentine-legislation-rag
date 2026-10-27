@@ -892,6 +892,38 @@ de quien los usa.
 almacén compartido. Y el límite cuenta pedidos, no llamadas al modelo: una
 pregunta que no encuentra nada cuenta igual que una que pide tres.
 
+## 48. La pantalla de consulta lee los mismos eventos que el comando
+
+**Decisión**: la página de inicio, en `/es` y en `/en`, hace la pregunta a
+`/api/answer` y muestra cada evento a medida que llega. El idioma de la página
+es el de la respuesta.
+**Qué muestra**: las fuentes primero, numeradas, con fecha, tema, el fragmento
+y el enlace al texto oficial; la respuesta con sus citas como enlaces a cada
+fuente; los montos que no coinciden, marcados; y qué se está esperando (la
+búsqueda, el modelo consultado, los que se saltearon y la segunda búsqueda).
+Al terminar, las fuentes que la respuesta no cita se atenúan.
+**Por qué `fetch` y no `EventSource`**: `EventSource` se reconecta solo cuando
+el flujo termina, y acá eso sería volver a preguntarle al modelo y gastar cupo.
+Tampoco puede leer el cuerpo de un `429`, que trae los segundos de espera.
+**La lógica, fuera de los componentes**: leer el flujo (`src/ui/event-stream.ts`),
+el estado de la pantalla después de cada evento (`src/ui/answer-view.ts`) y
+cómo se arma el texto con citas y montos (`src/ui/answer-text.ts`) son
+funciones sin React, con tests. Los componentes solo las muestran.
+**Los montos marcados, en el mismo orden**: el código que los coteja y la
+pantalla que los marca buscan con el mismo patrón, línea por línea, así que el
+tercer monto del texto es el tercer resultado del cotejo.
+**Detener**: un botón corta la respuesta, y salir de la página también. El
+servidor deja de pedirle texto al modelo.
+**Un error que encontró el navegador**: al apretar "Detener", el botón volvía a
+ser "Preguntar" antes de que terminara el clic, y como era el mismo elemento,
+ahora de tipo _submit_, la pregunta se enviaba otra vez. Con el límite por
+minuto en 1 se vio enseguida: detener daba un `429`. Ahora son dos botones
+distintos y el de detener cancela la acción del clic. Ningún test unitario lo
+habría encontrado: pasa entre React y el navegador.
+**Límites**: sin JavaScript el formulario no responde (lo resuelve el enlace
+con la pregunta, que viene después). No hay tests de navegador en el
+repositorio todavía: los de esta decisión se hicieron con Playwright a mano.
+
 ---
 
 ## Desarrollo asistido por IA

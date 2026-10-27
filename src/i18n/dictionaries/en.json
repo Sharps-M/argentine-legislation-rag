@@ -6,7 +6,6 @@
   "home": {
     "tagline": "Semantic search over Argentine national legislation",
     "intro": "Ask in plain language and get an answer that cites the source regulation.",
-    "comingSoon": "Search is not available yet: the project is under construction.",
     "disclaimer": "Not legal advice. Always check the official text."
   },
   "status": {
@@ -20,5 +19,65 @@
     "label": "Language",
     "es": "Español",
     "en": "English"
+  },
+  "ask": {
+    "label": "Question",
+    "placeholder": "For example: what is the cap on pay for overtime services?",
+    "submit": "Ask",
+    "stop": "Stop",
+    "tooShort": "Write at least 3 characters.",
+    "examples": "Try:",
+    "exampleQuestions": [
+      "Which law approves the amendment to the tax treaty with France?",
+      "Additional pay for military service in Antarctica",
+      "What does Ley 27818 provide?"
+    ],
+    "searching": "Searching the regulations…",
+    "asking": "Asking {model}…",
+    "skipped": "{model} {reason} ({seconds}).",
+    "resting": "{model} was not asked: it failed a moment ago.",
+    "reasons": {
+      "not_configured": "is not configured",
+      "unauthorized": "rejected the key",
+      "rate_limited": "is over its usage limit",
+      "overloaded": "has no capacity right now",
+      "unavailable": "did not answer"
+    },
+    "rewritten": "The regulations found did not answer. Searched again as: “{query}”.",
+    "rewrittenNothing": "The new search found nothing different.",
+    "stopped": "The answer was stopped.",
+    "answerHeading": "Answer",
+    "sourcesHeading": "Sources",
+    "outcome": {
+      "not_in_sources": "The regulations found do not answer the question. Look at the sources, or try other words.",
+      "uncited": "This answer cites no source: it cannot be checked.",
+      "no_sources": "No regulation is close to the question. Try other words."
+    },
+    "unknownCitation": "Source {n} does not exist: the model cited it by mistake.",
+    "amount": {
+      "other_source": "This amount is in another of the sources, not in the one cited.",
+      "not_found": "This amount is in none of the sources."
+    },
+    "amountsWarning": {
+      "one": "One amount does not match the source it cites. It is marked in the text.",
+      "other": "{count} amounts do not match the sources they cite. They are marked in the text."
+    },
+    "writtenBy": "Answer by {provider} · {model}",
+    "timings": "Search {search} · first word {first} · total {total}",
+    "failure": {
+      "invalid": "The question is not valid: it must be 3 to 500 characters long.",
+      "rateLimitedClient": "You asked many questions in the last minute. Try again in {seconds} s.",
+      "rateLimitedTotal": "The service is answering many questions. Try again in {seconds} s.",
+      "searchUnavailable": "Search is not available right now.",
+      "model": "No model could answer: the last one {reason}. The regulations found are below.",
+      "network": "The answer could not be completed. Check the connection and try again."
+    },
+    "source": {
+      "enacted": "Enacted on {date}",
+      "abstractOnly": "Abstract only: the full text is not published.",
+      "showText": "Show the passage",
+      "earlier": "Earlier regulations with nearly the same text:",
+      "older": "and {count} older"
+    }
   }
 }

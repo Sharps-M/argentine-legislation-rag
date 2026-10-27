@@ -1,6 +1,9 @@
 /** "[1]", "[1, 3]" and "[2][4]" in an answer. */
 const CITATION = /\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g;
 
+/** The same pattern, new each time, for the screen that turns citations into links. */
+export const citationPattern = () => new RegExp(CITATION.source, "g");
+
 export type Citations = {
   /** Numbers of the sources the answer points at, in order, without repeats. */
   cited: number[];
