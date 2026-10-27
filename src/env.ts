@@ -50,6 +50,12 @@ const envSchema = z.object({
   OLLAMA_CHAT_MODEL: list(z.string()).describe(
     "Local models to try, in order; empty means the default",
   ),
+  ANSWER_LIMIT_PER_CLIENT: z
+    .preprocess(emptyAsAbsent, z.coerce.number().int().min(0).default(5))
+    .describe("Answers per minute for each client; 0 means no limit"),
+  ANSWER_LIMIT_TOTAL: z
+    .preprocess(emptyAsAbsent, z.coerce.number().int().min(0).default(15))
+    .describe("Answers per minute for everyone together; 0 means no limit"),
 });
 
 export type Env = z.infer<typeof envSchema>;

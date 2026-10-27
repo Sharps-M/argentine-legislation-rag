@@ -860,6 +860,38 @@ descansar; ese error llega al lector como siempre.
 cuánto esperar, y eso no se lee. Con varios servidores, cada uno aprende por su
 cuenta.
 
+## 47. Cuántas respuestas por minuto da el servidor
+
+**Problema**: cada respuesta son de una a tres llamadas a un modelo, y el cupo
+gratuito de Gemini se cuenta por minuto y por día. `/api/answer` abierto deja
+que cualquiera lo gaste para todos, a propósito o por un programa que reintenta
+sin parar.
+**Decisión**: dos límites a la vez, por minuto. Uno por cliente (5), para que
+una sola persona no se quede con todas las respuestas, y uno total (15), para
+que tampoco puedan muchos clientes juntos, o uno solo con muchas direcciones.
+Pasado el límite, `429` con `Retry-After` y un mensaje que dice cuál se
+alcanzó. Los dos se cambian en `.env`; `0` desactiva uno.
+**Por qué esos números**: una persona que lee las respuestas pregunta pocas
+veces por minuto; cinco le alcanzan. Quince en total, con hasta tres llamadas
+cada una, todavía es un tope para el servicio y no para quien lee. Son valores
+para empezar, no medidos: se ajustan cuando haya tráfico real.
+**Cómo se cuenta**: una ventana móvil de un minuto con la hora de cada pedido.
+Un pedido rechazado no se cuenta, así que insistir no alarga la espera. Un
+pedido inválido (`400`) tampoco: se valida antes de contar.
+**Quién es el cliente**: la primera dirección de `X-Forwarded-For`, o
+`X-Real-IP`. Esos encabezados los escribe el _proxy_ que está delante del
+servidor; sin uno, el cliente puede inventarlos y saltear su límite, pero no el
+total.
+**Dónde se guarda**: en memoria, como los descansos de la decisión 46. Las
+claves sin pedidos recientes se borran, así que la memoria no crece con cada
+dirección nueva.
+**Qué no se limita**: `/api/search`, que no llama a ningún modelo con cupo, y
+los comandos (`npm run ask`, `npm run eval:answers`), que corren en la máquina
+de quien los usa.
+**Límites**: con varios servidores, cada uno cuenta lo suyo; haría falta un
+almacén compartido. Y el límite cuenta pedidos, no llamadas al modelo: una
+pregunta que no encuentra nada cuenta igual que una que pide tres.
+
 ---
 
 ## Desarrollo asistido por IA

@@ -1,3 +1,4 @@
+import type { AnswerLimits } from "@/server/rate-limit";
 import { parseSearchParams } from "@/search/params";
 import { QueryEmbeddingError } from "@/search/search";
 
@@ -22,14 +23,24 @@ export const formatEvent = (event: AnswerEvent): string => {
  * The last event says where the time went.
  *
  * - `400` the request is invalid (the body lists each problem)
+ * - `429` too many answers in the last minute, from this client or from
+ *   everyone: `Retry-After` says in how many seconds to try again
  * - `503` the embedding model cannot be reached, so there was nothing to stream
  * - `200` the stream. A failure of the chat model arrives inside it, as an
  *   `error` event after the sources.
  */
+export type AnswerRequestContext = {
+  signal?: AbortSignal;
+  /** Who is asking, for the limit per client. */
+  client?: string;
+  /** Left out, any number of answers is given. */
+  limits?: AnswerLimits;
+};
+
 export async function answerResponse(
   params: URLSearchParams,
   deps: AnswerDeps,
-  signal?: AbortSignal,
+  { signal, client = "unknown", limits }: AnswerRequestContext = {},
 ): Promise<Response> {
   const request = parseSearchParams(params);
   const lang = params.get("lang")?.trim() || undefined;
@@ -42,6 +53,25 @@ export async function answerResponse(
 
   if (!request.ok || issues.length > 0) {
     return Response.json({ error: "invalid_request", issues }, { status: 400 });
+  }
+
+  // After the validation: a request that was going to be refused anyway does
+  // not use up a place.
+  const admission = limits?.admit(client) ?? { ok: true };
+  if (!admission.ok) {
+    const seconds = Math.ceil(admission.retryAfterMs / 1000);
+    return Response.json(
+      {
+        error: "rate_limited",
+        limit: admission.limit,
+        message:
+          admission.limit === "client"
+            ? `Too many questions in the last minute. Try again in ${seconds} s.`
+            : `The service is answering too many questions right now. Try again in ${seconds} s.`,
+        retryAfterSeconds: seconds,
+      },
+      { status: 429, headers: { "Retry-After": String(seconds) } },
+    );
   }
 
   const events = answerQuestion(deps, request.query, {

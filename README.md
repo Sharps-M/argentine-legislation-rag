@@ -212,6 +212,16 @@ numbered, and a short set of rules: use only the sources, put the number of the
 source after every statement (`[1]`), say so when the sources do not answer,
 and never claim a regulation is still in force, which the data does not tell.
 
+`/api/answer` gives a limited number of answers per minute: five to each client
+and fifteen to everyone together (`ANSWER_LIMIT_PER_CLIENT`,
+`ANSWER_LIMIT_TOTAL`; `0` turns a limit off). Each answer is one to three calls
+to a chat model, and a free tier counts them: an open endpoint would let anyone
+spend the quota for everyone. Past the limit it answers `429`, with
+`Retry-After` and a message that says whose limit it was. A client is the first
+address in `X-Forwarded-For`, which only a proxy in front of the server can be
+trusted to write; the total limit holds either way. `npm run ask` and
+`npm run eval:answers` are not limited.
+
 The answer comes in Spanish or in English. The page a question comes from says
 which (`lang=es` or `lang=en`); when nobody says, it is guessed from the
 question. That choice is made in code and not left to the model: the rules, the

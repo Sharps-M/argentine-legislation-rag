@@ -124,4 +124,28 @@ describe("parseEnv", () => {
       }),
     ).toThrowError(/OLLAMA_BASE_URL/);
   });
+
+  it("limits the answers per minute, with a default for each limit", () => {
+    expect(parseEnv({ DATABASE_URL: "postgres://localhost/db" })).toMatchObject({
+      ANSWER_LIMIT_PER_CLIENT: 5,
+      ANSWER_LIMIT_TOTAL: 15,
+    });
+    expect(
+      parseEnv({
+        DATABASE_URL: "postgres://localhost/db",
+        ANSWER_LIMIT_PER_CLIENT: "0",
+        ANSWER_LIMIT_TOTAL: " ",
+      }),
+    ).toMatchObject({ ANSWER_LIMIT_PER_CLIENT: 0, ANSWER_LIMIT_TOTAL: 15 });
+  });
+
+  it("rejects a limit that is not a whole number from 0", () => {
+    for (const name of ["ANSWER_LIMIT_PER_CLIENT", "ANSWER_LIMIT_TOTAL"]) {
+      for (const value of ["-1", "2.5", "many"]) {
+        expect(() =>
+          parseEnv({ DATABASE_URL: "postgres://localhost/db", [name]: value }),
+        ).toThrowError(new RegExp(name));
+      }
+    }
+  });
 });

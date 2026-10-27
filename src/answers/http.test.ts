@@ -8,6 +8,8 @@ import {
 } from "@/search/search";
 
 import { searchHit } from "../../tests/support/search-hits";
+import { createAnswerLimits } from "@/server/rate-limit";
+
 import { answerResponse, formatEvent } from "./http";
 
 const params = (query: string) => new URLSearchParams(query);
@@ -199,5 +201,102 @@ describe("answerResponse", () => {
     await reader.cancel();
 
     expect(stopped).toBe(true);
+  });
+});
+
+describe("answerResponse, limits", () => {
+  const hits = [searchHit()];
+
+  it("turns a client away once it reached its limit, saying when to come back", async () => {
+    const limits = createAnswerLimits({ perClient: 1, total: 10, now: () => 0 });
+    const calls: SearchOptions[] = [];
+    const deps = { search: searchFinding(hits, calls), chat: chatWriting(["Sí [1]."]) };
+
+    const first = await answerResponse(params("q=tope de servicios"), deps, {
+      client: "203.0.113.7",
+      limits,
+    });
+    await first.text();
+    const second = await answerResponse(params("q=tope de servicios"), deps, {
+      client: "203.0.113.7",
+      limits,
+    });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(second.headers.get("Retry-After")).toBe("60");
+    expect(await second.json()).toEqual({
+      error: "rate_limited",
+      limit: "client",
+      message: "Too many questions in the last minute. Try again in 60 s.",
+      retryAfterSeconds: 60,
+    });
+    // Turned away before the search: nothing was spent on it.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("says when the whole service is busy", async () => {
+    const limits = createAnswerLimits({ perClient: 5, total: 1, now: () => 0 });
+    const deps = { search: searchFinding(hits), chat: chatWriting(["Sí [1]."]) };
+
+    await (
+      await answerResponse(params("q=tope"), deps, { client: "a", limits })
+    ).text();
+    const response = await answerResponse(params("q=tope"), deps, {
+      client: "b",
+      limits,
+    });
+
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({
+      limit: "total",
+      message:
+        "The service is answering too many questions right now. Try again in 60 s.",
+    });
+  });
+
+  it("rounds a wait up to the whole second, and never says 0", async () => {
+    let time = 0;
+    const limits = createAnswerLimits({ perClient: 1, total: 10, now: () => time });
+    const deps = { search: searchFinding(hits), chat: chatWriting(["Sí [1]."]) };
+    await (
+      await answerResponse(params("q=tope"), deps, { client: "a", limits })
+    ).text();
+
+    time = 59_999.5;
+    const response = await answerResponse(params("q=tope"), deps, {
+      client: "a",
+      limits,
+    });
+
+    expect(response.headers.get("Retry-After")).toBe("1");
+  });
+
+  it("does not count an invalid request", async () => {
+    const limits = createAnswerLimits({ perClient: 1, total: 10, now: () => 0 });
+    const deps = { search: searchFinding(hits), chat: chatWriting(["Sí [1]."]) };
+
+    const invalid = await answerResponse(params("q=ab&lang=pt"), deps, {
+      client: "a",
+      limits,
+    });
+    const valid = await answerResponse(params("q=tope"), deps, { client: "a", limits });
+
+    expect(invalid.status).toBe(400);
+    expect(valid.status).toBe(200);
+  });
+
+  it("counts clients apart, and one with no address as the client nobody could name", async () => {
+    const limits = createAnswerLimits({ perClient: 1, total: 10, now: () => 0 });
+    const deps = { search: searchFinding(hits), chat: chatWriting(["Sí [1]."]) };
+
+    const statuses = [];
+    for (const client of ["a", "b", undefined, "unknown"]) {
+      const response = await answerResponse(params("q=tope"), deps, { client, limits });
+      statuses.push(response.status);
+      await response.text();
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
   });
 });
