@@ -965,3 +965,44 @@ Dos observaciones más:
 - Repetir la evaluación para ver si mascotas pasa con la regla nueva.
 - El tope de junio: la respuesta copia toda la lista de exclusiones del
   artículo. No es un error, pero es largo para lo que se preguntó.
+
+## Cuarta evaluación de respuestas — 27 de octubre de 2026
+
+Con la regla de que las normas usan sus propias palabras (decisión 45). Pasaron
+**7 de 7**, por primera vez, todas escritas por `gemini-3.5-flash-lite`, en
+26,8 s en total.
+
+Solo se vio el resumen de la corrida, no el texto de las respuestas. "ok"
+significa que no hay nada contable mal: que la de mascotas cite una ley
+esperada no dice todavía si la respuesta es buena. Queda por leer.
+
+## Cierre de la etapa 5 — 27 de octubre de 2026
+
+Las cuatro rondas de la evaluación de respuestas, con las mismas siete
+preguntas:
+
+| Ronda | Pasaron | Qué cambió antes de la ronda                                    |
+| ----- | ------- | --------------------------------------------------------------- |
+| 1     | 6 de 7  | Nada: la base. Una de las aprobadas no respondía (ver la ronda) |
+| 2     | 5 de 7  | Fecha de la pregunta; "las fuentes no responden" con nombre     |
+| 3     | 6 de 7  | Primeros artículos de la norma citada; segunda búsqueda         |
+| 4     | 7 de 7  | Las normas usan sus propias palabras                            |
+
+La ronda 2 pasó menos que la 1 y era mejor: la evaluación dejó de aprobar
+respuestas que no respondían.
+
+### Lo que quedó abierto
+
+- **La búsqueda de 14 segundos.** La demora de la primera búsqueda de cada tanda
+  (entre 4,4 y 6,1 s) está explicada: Ollama descarga `bge-m3` tras cinco
+  minutos sin uso y la primera pregunta paga la carga. La de 14,3 s, después de
+  una respuesta del modelo local, sigue sin probar: desde entonces el modelo
+  local no volvió a responder, porque Gemini contestó todas.
+- **La búsqueda con la regla de las fechas no se midió.** `npm run eval` no se
+  corrió después de la decisión 42. Hay que ver si la pregunta del tope sube al
+  primer puesto y si alguna otra baja.
+- **El texto de la cuarta ronda.** Ver arriba.
+- **El tope de junio** copia entera la lista de exclusiones del artículo.
+- **Siete preguntas** sirven para comparar una ronda con otra, no como medida.
+- **El modelo local** (`gemma3:4b`) no pasó por la evaluación: no se sabe cómo
+  responde a estas siete preguntas.

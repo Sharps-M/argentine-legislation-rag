@@ -456,7 +456,9 @@ npm run db:migrate && npm run test:integration
       split along its legal structure (preamble, articles, annexes)
 - [x] **4. Embeddings and search** — local embeddings behind a provider interface,
       HNSW index, similarity search with filters and a retrieval evaluation
-- [ ] **5. Cited answers** — streamed answers grounded in the retrieved chunks
+- [x] **5. Cited answers** — streamed answers from a chain of models, with
+      citations and amounts checked in code, a second search in the words of the
+      law, rate limits and an answer evaluation
 - [ ] **6. Interface** — search screen with linked citations and filters
 - [ ] **7. Release** — screenshots, architecture notes and a public demo
 

@@ -467,8 +467,8 @@ respuesta no cita nada (`uncited`).
 número apunte a una fuente real sí se puede comprobar sin leer la ley, y es el
 error más grave: una cita inventada con aspecto de verdadera.
 **Límite**: no comprueba que la fuente diga lo que la respuesta afirma. Para los
-montos, sí (decisión 40). Para lo demás están el enlace al texto oficial y, más
-adelante, una evaluación de las respuestas.
+montos, sí (decisión 40). Para lo demás están el enlace al texto oficial y la
+evaluación de las respuestas (decisión 41).
 
 ## 35. Sin fuentes no se le pregunta al modelo
 
@@ -517,9 +517,9 @@ incluyen tres reglas que vienen de lo que mostró la etapa 4.
   con guiones. Se piden párrafos o listas con guiones, para que la pantalla
   muestre siempre lo mismo.
 
-**Lo que no se hace todavía**: traer el texto de la edición anterior cuando la
-pregunta la pide por fecha, y reescribir las preguntas amplias. Son los dos
-pendientes de la etapa 4 y se van a medir antes de decidir.
+**Los dos pendientes de la etapa 4** se resolvieron después, midiendo: la
+edición anterior pedida por fecha (decisión 42) y las preguntas amplias
+(decisión 45).
 
 ## 37. La respuesta viaja como eventos, con las fuentes primero
 
