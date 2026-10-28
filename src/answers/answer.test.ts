@@ -588,6 +588,23 @@ describe("answerQuestion, when the sources do not answer", () => {
     });
   });
 
+  it("does not look up by number a regulation only the rewrite names", async () => {
+    const { search, calls } = scriptedSearch(first, better);
+    // A small model, asked not to add anything, named laws that do not exist.
+    const { chat } = scriptedChat(
+      [DECLINE],
+      ["Protección animal, Ley 26.339 y Decreto 6333/2013"],
+      ["Sí [1]."],
+    );
+
+    await collect(
+      answerQuestion({ search, chat }, "Normativas relacionadas con mascotas"),
+    );
+
+    expect(calls[1]?.query).toContain("Ley 26.339");
+    expect(calls[1]?.options).toMatchObject({ references: [], dates: [] });
+  });
+
   it("keeps the first answer when the second search brings nothing new", async () => {
     const { search, calls } = scriptedSearch(first, [first[1]!]);
     const { chat, requests } = scriptedChat([DECLINE], [REWRITE]);

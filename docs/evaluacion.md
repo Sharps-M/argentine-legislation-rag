@@ -1036,3 +1036,76 @@ Sin respuesta en el corpus: 5 de 5 rechazadas.
   norma. `npm run eval -- --no-dates` separa la primera; la carga del equipo
   también cuenta, como ya pasó una vez (134 ms en una corrida y 5 ms en la
   siguiente).
+
+## El modelo local — 28 de octubre de 2026
+
+Las mismas siete preguntas de `npm run eval:answers`, con
+`CHAT_PROVIDER=ollama`: las responde `gemma3:4b`, en una RTX 3060 de 6 GB. Es
+lo que tendría quien clone el proyecto sin clave de Gemini. Dos corridas, que
+difieren solo en la ventana de contexto de Ollama:
+
+| Ventana                    | Pasaron | Tiempo total | Primera respuesta |
+| -------------------------- | ------- | ------------ | ----------------- |
+| 4.096 (elegida por Ollama) | 6 de 7  | 78,4 s       | 42,4 s            |
+| **16.384**                 | 6 de 7  | 85,8 s       | 36,3 s            |
+
+El conteo es el mismo. Las respuestas, no.
+
+### Con 4.096 tokens
+
+Ollama elige la ventana según la memoria de la placa de video
+(`vram-based default context … default_num_ctx=4096` en su registro), y
+`ollama ps` lo confirmó. Las reglas y ocho fragmentos de hasta 1.800
+caracteres pueden pasar de eso; entonces Ollama recorta el _prompt_ para que
+entre. No se midió cuántos _tokens_ tenía cada uno, pero lo que se leyó
+coincide:
+
+- **Antártida**: los montos en números estaban en la fuente (7 de 7), los
+  escritos en letras salieron deformados ("UNO MILQUINIENTOS… DOCENTA") y la
+  respuesta terminó a la mitad, en "La Ley".
+- **Francia**: respondió "Ley 27814" y a continuación "The sources do not
+  answer the question". Se contradijo, después de una segunda búsqueda.
+- **Mascotas**: empezó con "Las fuentes no responden" y siguió citando
+  artículos de la Ley 23899, que no tratan de mascotas.
+
+### Con 16.384 tokens
+
+- **Antártida**: los cuatro montos vigentes, en letras y en números, en una
+  lista, con la cita de la Ley 23547. Completa.
+- **Acta del SINEP, tope desde junio, Ley 27818**: correctas, igual que con la
+  ventana chica. El tope es el mismo $871.825 que dio Gemini.
+- **Francia**: la Ley 27814 en la primera respuesta, sin segunda búsqueda y sin
+  contradecirse. Agrega otras dos normas sobre el mismo tratado, con su cita.
+- **Mascotas**: "Las fuentes no responden la pregunta". Es la respuesta honesta
+  para lo que encontró. Falla porque la segunda búsqueda no trajo la ley
+  esperada.
+- **Empanadas**: no llega al modelo, como siempre.
+
+`ollama ps`: los dos modelos, `gemma3:4b` con 16.384 y `bge-m3` con 8.192,
+entran enteros en la placa (`100% GPU`).
+
+### La segunda búsqueda inventó normas
+
+Con las dos ventanas, la reescritura de "mascotas" nombró normas que no
+existen o que la pregunta no mencionaba ("Ley 14.356/2006", "N° 6333/2013"), aunque la instrucción pide no agregar datos. No hizo daño: la
+segunda búsqueda toma las normas citadas y las fechas de la pregunta del
+lector, no de la reescritura (decisión 45), así que esas normas solo se usaron
+para buscar por significado. Se agregó un test con una reescritura así.
+
+### Tiempos
+
+- **La primera respuesta tarda unos 35 s**: casi todo es Ollama cargando
+  `gemma3:4b`. Las siguientes, de 5 a 16 s.
+- **La búsqueda lenta apareció de nuevo**: 14,7 s y 7,9 s en la primera
+  pregunta, y 9,2 s en la segunda de la corrida con 16.384, justo después de la
+  primera respuesta del modelo local. Las demás, entre 0,4 y 1,4 s. Encaja con
+  Ollama acomodando los dos modelos en la placa la primera vez, pero no está
+  probado: haría falta su registro con `OLLAMA_DEBUG=1`.
+
+### Qué queda
+
+- **Mascotas** sigue sin la ley esperada con el modelo local; con Gemini la
+  encontró (cuarta ronda).
+- **El conteo no vio el problema.** Las dos corridas dieron 6 de 7: lo que
+  cambió solo se ve leyendo. Una regla que se podría contar es que una
+  respuesta no termine en medio de una oración.

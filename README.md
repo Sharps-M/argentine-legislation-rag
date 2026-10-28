@@ -358,6 +358,36 @@ chunks are sent to Google, which may use them to improve its products. The
 chunks are public law; the question is whatever the reader types.
 `CHAT_PROVIDER=ollama` keeps both on the machine.
 
+### The local model
+
+Without a Gemini key, the answers come from `gemma3:4b` on Ollama. It needs
+**a context window of 16,384 tokens**. Ollama picks one from the memory of the
+graphics card, and with 6 GB it chose 4,096. The rules and eight sources of
+up to 1,800 characters each can take more than that; Ollama then cuts the
+prompt to fit, and the answers came out cut short or contradicting themselves.
+Set it where Ollama runs:
+
+```bash
+# Linux, Ollama as a service
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+printf '[Service]\nEnvironment="OLLAMA_CONTEXT_LENGTH=16384"\n' |
+  sudo tee /etc/systemd/system/ollama.service.d/context.conf
+sudo systemctl daemon-reload && sudo systemctl restart ollama
+
+# Started by hand
+OLLAMA_CONTEXT_LENGTH=16384 ollama serve
+```
+
+On Windows or macOS, set `OLLAMA_CONTEXT_LENGTH=16384` as an environment
+variable for the Ollama app and restart it. `ollama ps` shows the window in
+use (`CONTEXT`) and whether the model still fits on the GPU (`PROCESSOR`).
+
+Measured with the seven questions of `npm run eval:answers` on an RTX 3060
+with 6 GB (`docs/evaluacion.md`): 6 of 7, the same count with either window,
+but only with 16,384 did the answers read right. The first answer takes about
+35 seconds, while Ollama loads the model; the rest, 5 to 16. It writes worse
+than Gemini, and it is the one that never leaves the machine.
+
 ### The screen
 
 `npm run dev` and open `http://localhost:3000`: the home page, in Spanish

@@ -1068,6 +1068,30 @@ mañana, y la actualización dentro de la misma versión mayor no rompió nada.
 `npm audit fix --force` instala `drizzle-kit` 0.18, una versión vieja e
 incompatible. Se acepta hasta que `drizzle-kit` actualice esa dependencia.
 
+## 53. El modelo local necesita una ventana de 16.384 tokens
+
+**Problema**: la primera evaluación con `gemma3:4b` (el modelo que tendría
+quien clone el proyecto sin clave de Gemini) dio respuestas cortadas a la mitad,
+montos en letras deformados y respuestas que se contradecían. Ollama había
+elegido una ventana de contexto de 4.096 _tokens_ por la memoria de la placa (6
+GB). Las reglas y los ocho fragmentos pueden no entrar, y Ollama recorta el
+_prompt_.
+**Decisión**: documentar que Ollama tiene que correr con
+`OLLAMA_CONTEXT_LENGTH=16384` (README, sección "The local model", y
+`.env.example`). Con ese valor, la misma evaluación dio respuestas completas y
+coherentes, y los dos modelos siguen entrando en la placa. Medido en
+`docs/evaluacion.md`.
+**Por qué no en el código**: el proyecto le habla a Ollama por su API
+compatible con OpenAI, que no recibe el tamaño de la ventana; se configura en
+el servidor de Ollama. Pasarlo desde el código obligaría a usar la API propia
+de Ollama con otro proveedor del AI SDK, solo para este caso.
+**Alternativas descartadas**: mandar menos fuentes al modelo local (perdería
+respuestas que necesitan varias, como la Antártida) o recortar los fragmentos
+(lo que se recorta puede ser el monto).
+**Costo**: es un paso más de instalación, fuera del repositorio, y si se olvida
+no hay error: las respuestas salen peores. `ollama ps` muestra la ventana en
+uso.
+
 ---
 
 ## Desarrollo asistido por IA
