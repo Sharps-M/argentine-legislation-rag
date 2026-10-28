@@ -143,13 +143,15 @@ export function Ask({
   }
 
   // Opened with a question in the address: show the answer the tab kept for it,
-  // or ask. Opened without one: bring back what was being written. Once, even
-  // when React runs effects twice in development. This effect comes before the
-  // one that saves the draft, so it reads the draft before it is written over.
-  const started = useRef(false);
+  // or ask. Opened without one: bring back what was being written. This effect
+  // comes before the one that saves the draft, so it reads the draft before it
+  // is written over.
+  //
+  // Leaving the page stops the answer: no quota is spent on what nobody reads.
+  // React runs this twice in development (mount, unmount, mount), so the
+  // answer asked by the first run is stopped and the second run asks again. A
+  // guard that asked only once left the page showing "stopped" in development.
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
     for (const { search, view: kept } of parseAnswers(readKept(ANSWERS_KEY))) {
       given.current.set(search, kept);
     }
@@ -162,13 +164,14 @@ export function Ask({
       // keeps in step with; the state that follows comes from them.
       if (kept) dispatch({ type: "restore", view: kept });
       else void ask(initial);
-      return;
+      return () => running.current?.abort();
     }
     const draft = parseDraft(readKept(DRAFT_KEY));
     // The tab's storage does not exist on the server: the draft can only come
     // back after the first render, or the page would not match what was sent.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (draft && !isEmptyDraft(draft)) setFields(draft);
+    return () => running.current?.abort();
     // Only on the first render: later questions come from the form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -206,9 +209,6 @@ export function Ask({
     // `ask` only reads refs and stable values.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Leaving the page stops the answer: no quota is spent on what nobody reads.
-  useEffect(() => () => running.current?.abort(), []);
 
   const busy = view.phase === "searching" || view.phase === "answering";
   const activeFilters = filterCount(queryOf(fields));

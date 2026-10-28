@@ -10,25 +10,57 @@ Ask a question in plain language and get an answer that **cites the regulation i
 comes from**. If the retrieved regulations do not support an answer, it says so
 instead of making one up.
 
+![A question about a pay supplement, answered as it is written, with its sources](docs/screenshots/answer.gif)
+
 It is built end to end in TypeScript as a retrieval-augmented generation (RAG)
-system on open government data, with a swappable AI provider so it runs at zero
-cost: local models for development, a free API tier for the demo.
+system on open government data, and it runs at no cost: embeddings on a local
+model, answers from a free API tier or a local model.
 
-> **Status: under construction.** The project is built in short, verifiable
-> stages. See the [roadmap](#roadmap) for what works today.
+**What is in it**
 
-![Home page](docs/screenshots/home-es.png)
+- **About 35,000 regulations and 212,000 chunks**: every national law and
+  decree-law in the [InfoLEG open data](#data-source-and-disclaimer) since
+  1853, and the decrees of the last five years, cut along their legal
+  structure (articles, annexes), with a weekly update of what changed.
+- **Answers that can be checked.** Every citation is a link to its source, and
+  every amount of money in the answer is looked up in the source it cites, in
+  code, not by asking the model.
+- **Honest when it does not know.** If the sources do not answer, it says so,
+  tries once more in the words a law would use, and otherwise stops there.
+- **No single point of failure for the answers**: a chain of models (Gemini's
+  free tier, any OpenAI-compatible service, a local model), each one tried when
+  the one before cannot answer.
+- **Measured, not assumed.** A retrieval evaluation (recall@1 76%, MRR 0.837 on
+  25 questions) and an answer evaluation (7 of 7 with Gemini, 6 of 7 with the
+  local model), with every round and what it changed in
+  [`docs/evaluacion.md`](docs/evaluacion.md). Fifty-four design decisions, with
+  the alternatives turned down, in [`docs/decisiones.md`](docs/decisiones.md).
+- **Tested at three levels**: 605 unit tests, 73 integration tests against a
+  real PostgreSQL, and 11 browser tests with Playwright, all in CI.
+
+There is no public demo: it would mean hosting the database and the models, and
+a free tier that a few visitors could use up in minutes (decision 54). It runs
+on a laptop instead; [Getting started](#getting-started) has the steps.
+
+| Answer with its sources                           | In English, dark theme                                             | A shared link on a phone                                  |
+| ------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------- |
+| ![Spanish answer](docs/screenshots/answer-es.png) | ![English answer, dark theme](docs/screenshots/answer-en-dark.png) | ![Filters on a phone](docs/screenshots/filters-phone.png) |
 
 ## How it works
 
-```
-INGESTION (once, by command)
-InfoLEG open data ─► validate & load ─► full text & chunks ─► embeddings ─┐
-                                                                          ▼
-                                                            PostgreSQL + pgvector
-                                                                          │
-QUERY (every question)                                                    ▼
-question ─► embed question ─► nearest chunks ─► build context ─► cited answer
+```mermaid
+flowchart LR
+  subgraph ingestion["Ingestion: by command, then every week"]
+    direction LR
+    A[InfoLEG open data] --> B[Validate and load] --> C[Full text, cut by article] --> D[Embeddings with bge-m3]
+  end
+  D --> DB[(PostgreSQL + pgvector)]
+  subgraph query["Every question"]
+    direction LR
+    Q[Question] --> E[Embed] --> S[Nearest chunks, and the regulations it cites by number]
+    S --> M[Chain of models, with numbered sources] --> V[Check citations and amounts] --> R[Answer, streamed]
+  end
+  DB --> S
 ```
 
 Each AI provider sits behind an interface, so it can be swapped without touching
@@ -528,25 +560,26 @@ prints every answer to be read.
 
 ## Scripts
 
-| Command                    | What it does                                          |
-| -------------------------- | ----------------------------------------------------- |
-| `npm run dev`              | Start the development server                          |
-| `npm run build`            | Production build                                      |
-| `npm run lint`             | ESLint                                                |
-| `npm run typecheck`        | Generate route types and run `tsc`                    |
-| `npm run format:check`     | Prettier check                                        |
-| `npm test`                 | Unit tests                                            |
-| `npm run test:integration` | Integration tests (needs `DATABASE_URL`)              |
-| `npm run test:e2e`         | Browser tests of the page (needs the database server) |
-| `npm run db:migrate`       | Apply SQL migrations                                  |
-| `npm run ingest`           | Load regulations from the InfoLEG data                |
-| `npm run texts`            | Download, clean and chunk the full texts              |
-| `npm run embed`            | Generate the embedding of each chunk                  |
-| `npm run update`           | Bring the corpus up to date with InfoLEG              |
-| `npm run search`           | Semantic search from the command line                 |
-| `npm run ask`              | Answer a question, citing its sources                 |
-| `npm run eval`             | Measure the retrieval (recall@k, MRR)                 |
-| `npm run eval:answers`     | Check a handful of answers                            |
+| Command                    | What it does                                           |
+| -------------------------- | ------------------------------------------------------ |
+| `npm run dev`              | Start the development server                           |
+| `npm run build`            | Production build                                       |
+| `npm run lint`             | ESLint                                                 |
+| `npm run typecheck`        | Generate route types and run `tsc`                     |
+| `npm run format:check`     | Prettier check                                         |
+| `npm test`                 | Unit tests                                             |
+| `npm run test:integration` | Integration tests (needs `DATABASE_URL`)               |
+| `npm run test:e2e`         | Browser tests of the page (needs the database server)  |
+| `npm run db:migrate`       | Apply SQL migrations                                   |
+| `npm run ingest`           | Load regulations from the InfoLEG data                 |
+| `npm run texts`            | Download, clean and chunk the full texts               |
+| `npm run embed`            | Generate the embedding of each chunk                   |
+| `npm run update`           | Bring the corpus up to date with InfoLEG               |
+| `npm run search`           | Semantic search from the command line                  |
+| `npm run ask`              | Answer a question, citing its sources                  |
+| `npm run eval`             | Measure the retrieval (recall@k, MRR)                  |
+| `npm run eval:answers`     | Check a handful of answers                             |
+| `npm run screenshots`      | The README's screenshots and GIF, from the running app |
 
 The integration tests empty the tables they use, so they refuse to run against
 a database that holds a real ingestion. Use a separate database for them:
@@ -573,6 +606,11 @@ citation leading to its source, stopping without asking again, the filters in
 the request and the address, a link opening with its answer, going back,
 reloading, changing the language, and the page without JavaScript.
 
+The screenshots and the GIF at the top come from the app running with the real
+corpus: `npm run dev` in one terminal, `npm run screenshots` in another. It
+asks four questions, so it is a real use of the chat model; the GIF needs
+`ffmpeg`.
+
 ## Roadmap
 
 - [x] **1. Project foundation** — Next.js, strict TypeScript, PostgreSQL + pgvector,
@@ -588,7 +626,8 @@ reloading, changing the language, and the page without JavaScript.
       law, rate limits and an answer evaluation
 - [x] **6. Interface** — answers as they are written, with linked citations,
       filters and shareable links; a weekly update of the corpus; browser tests
-- [ ] **7. Release** — screenshots, architecture notes and a tagged version
+- [x] **7. Release** — screenshots, architecture notes and version 1.0.0
+      ([changelog](CHANGELOG.md)); no public demo (decision 54)
 
 ## Data source and disclaimer
 

@@ -35,7 +35,7 @@ export default async function HomePage({ params, searchParams }: PageProps<"/[la
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-16">
-      <header className="flex items-start justify-between gap-6">
+      <header className="flex flex-col-reverse items-start gap-4 sm:flex-row sm:justify-between sm:gap-6">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">{dict.meta.title}</h1>
           <p className="mt-2 text-lg text-muted">{dict.home.tagline}</p>

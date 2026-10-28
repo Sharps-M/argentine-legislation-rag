@@ -1092,6 +1092,38 @@ respuestas que necesitan varias, como la Antártida) o recortar los fragmentos
 no hay error: las respuestas salen peores. `ollama ps` muestra la ventana en
 uso.
 
+## 54. Sin demo pública
+
+**Decisión**: el proyecto no se publica en un servidor. Se entrega como
+repositorio, con capturas y una animación tomadas de la aplicación corriendo
+con el corpus real (`npm run screenshots`), y con los pasos para levantarlo en
+una computadora.
+**Por qué**:
+
+- **Alojarlo cuesta.** Hace falta un servidor con PostgreSQL, pgvector y unos
+  212.000 fragmentos con sus vectores, y otro con Ollama para vectorizar cada
+  pregunta: un costo mensual para un proyecto que no lo necesita.
+- **El cupo gratuito de Gemini se agota.** Los límites por minuto (decisión 47)
+  protegen el cupo, pero con un enlace público unos pocos visitantes lo
+  usarían en minutos, y el resto vería el modelo local, que en un servidor sin
+  placa de video tardaría más que los 35 segundos medidos con una.
+- **Es un proyecto de portafolio.** Lo que se evalúa es el código, las
+  decisiones y las mediciones, que están en el repositorio.
+
+**Lo que se hizo en su lugar**: el README empieza con la animación de una
+respuesta real y tres capturas (español, inglés en tema oscuro, un enlace
+compartido en un teléfono). El script que las toma queda en el repositorio, así
+que se pueden volver a tomar cuando cambie la pantalla.
+**Un error que apareció al tomarlas**: en `npm run dev`, abrir un enlace con
+una pregunta mostraba "Se detuvo la respuesta". React monta dos veces los
+componentes en desarrollo; la limpieza que detiene la respuesta al salir de la
+página detenía la del primer montaje, y una guarda impedía que el segundo
+volviera a preguntar. Ahora la misma limpieza detiene y el segundo montaje
+pregunta de nuevo. En producción, donde corren los tests de navegador, no
+pasaba.
+**Costo**: quien quiera probarlo tiene que instalar Docker, Ollama y cargar el
+corpus, que lleva horas.
+
 ---
 
 ## Desarrollo asistido por IA

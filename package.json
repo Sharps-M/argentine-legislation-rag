@@ -1,6 +1,6 @@
 {
   "name": "argentine-legislation-rag",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -23,7 +23,8 @@
     "search": "tsx --env-file-if-exists=.env src/search/cli.ts",
     "ask": "tsx --env-file-if-exists=.env src/answers/cli.ts",
     "eval": "tsx --env-file-if-exists=.env src/eval/cli.ts",
-    "eval:answers": "tsx --env-file-if-exists=.env src/eval/answers-cli.ts"
+    "eval:answers": "tsx --env-file-if-exists=.env src/eval/answers-cli.ts",
+    "screenshots": "tsx scripts/screenshots.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.90",
