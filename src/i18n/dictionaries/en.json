@@ -50,6 +50,8 @@
     "rewritten": "The regulations found did not answer. Searched again as: “{query}”.",
     "rewrittenNothing": "The new search found nothing different.",
     "stopped": "The answer was stopped.",
+    "otherLanguage": "This answer was written in Spanish, before the language was changed.",
+    "answerAgain": "Answer in English",
     "answerHeading": "Answer",
     "sourcesHeading": "Sources",
     "outcome": {
@@ -82,6 +84,21 @@
       "showText": "Show the passage",
       "earlier": "Earlier regulations with nearly the same text:",
       "older": "and {count} older"
-    }
+    },
+    "filters": {
+      "heading": "Filters",
+      "type": "Type of regulation",
+      "anyType": "All",
+      "types": {
+        "Ley": "Laws",
+        "Decreto": "Decrees",
+        "Decreto/Ley": "Decree-laws"
+      },
+      "from": "From the year",
+      "to": "To the year",
+      "clear": "Clear filters",
+      "yearsOrder": "The first year cannot be later than the last one."
+    },
+    "noscript": "This page needs JavaScript to write the answer. The question is in the address: once it is on, it is answered on its own."
   }
 }

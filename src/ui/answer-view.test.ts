@@ -161,6 +161,16 @@ describe("answerReducer", () => {
   });
 });
 
+describe("restoring an answer", () => {
+  it("shows again an answer that was kept, as it was", () => {
+    const kept = run({ type: "start", question: "uno" }, event(done));
+
+    expect(
+      run({ type: "start", question: "dos" }, { type: "restore", view: kept }),
+    ).toBe(kept);
+  });
+});
+
 describe("failureOf", () => {
   it("reads the limit and the wait of a 429", () => {
     expect(failureOf(429, { limit: "total", retryAfterSeconds: 12.2 })).toEqual({

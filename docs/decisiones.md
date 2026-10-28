@@ -976,6 +976,38 @@ el texto de una página sin cambiar nada en el dataset, no se ve. El recorte de
 decretos se calcula cada vez desde la fecha del día; los que salen quedan, los
 que entran se suman.
 
+## 50. La pregunta vive en la dirección de la página
+
+**Decisión**: la pregunta y sus filtros (tipo de norma, años) van en la
+dirección: `/es?q=...&type=Decreto&from=2026`. Al preguntar se agrega una entrada
+al historial del navegador, sin recargar la página.
+**Qué se gana**: un enlace abre la página con su respuesta, y se puede compartir
+o guardar. Y "Atrás" vuelve a la respuesta anterior.
+**Atrás no vuelve a preguntar**: las respuestas que terminaron se guardan por su
+dirección, en la página y en la pestaña (`sessionStorage`). Volver a una, o
+recargar la página, muestra la que ya se dio, sin gastar otra pregunta del cupo.
+Lo guardado queda en el navegador y se va al cerrar la pestaña; si el navegador
+no deja guardar (ventana privada, almacenamiento desactivado), se pregunta de
+nuevo, como antes.
+**Cambiar de idioma no pierde nada**: los enlaces de idioma conservan la
+pregunta, y abren la página otra vez. Lo que se estaba escribiendo (pregunta y
+filtros sin enviar) también se guarda en la pestaña y vuelve. Una respuesta ya
+dada se conserva en el idioma en que se escribió, con un aviso y un botón para
+pedirla en el idioma nuevo. Se eligió así, y no responder de nuevo al cambiar,
+porque eso borraba la respuesta, tardaba y gastaba una pregunta del cupo solo por
+cambiar la interfaz.
+**Una dirección mal escrita no se rechaza**: lo que no es válido (un tipo de
+norma que el corpus no tiene, un año fuera de rango) se deja afuera y la página
+abre igual, sin ese filtro.
+**Sin JavaScript**: el formulario es un `GET` común, así que lleva la pregunta a
+la dirección, y la página dice que necesita JavaScript para escribir la
+respuesta. Responder sin JavaScript obligaría a generar la respuesta entera en
+el servidor antes de mostrar nada, con la misma llamada al modelo y sin ver el
+texto mientras se escribe; no se hizo.
+**Filtros, los del corpus**: leyes, decretos y decretos-ley, los tres tipos que
+el corpus tiene (decisión 29). Se ocultan en un desplegable que se abre solo si
+la dirección trae alguno.
+
 ---
 
 ## Desarrollo asistido por IA

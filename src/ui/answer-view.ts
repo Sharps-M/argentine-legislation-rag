@@ -57,7 +57,9 @@ export type AnswerAction =
   | { type: "start"; question: string }
   | { type: "event"; event: AnswerEvent }
   | { type: "failed"; failure: Failure }
-  | { type: "stopped" };
+  | { type: "stopped" }
+  /** Back to an answer already given, kept when the reader moved on. */
+  | { type: "restore"; view: AnswerView };
 
 /** What the page shows, after each thing that happens. */
 export function answerReducer(view: AnswerView, action: AnswerAction): AnswerView {
@@ -76,6 +78,9 @@ export function answerReducer(view: AnswerView, action: AnswerAction): AnswerVie
 
     case "event":
       return onEvent(view, action.event);
+
+    case "restore":
+      return action.view;
   }
 }
 

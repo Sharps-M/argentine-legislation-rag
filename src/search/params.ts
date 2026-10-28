@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { MAX_QUERY_LENGTH, MIN_QUERY_LENGTH } from "./query-limits";
+import { MAX_QUERY_LENGTH, MAX_YEAR, MIN_QUERY_LENGTH, MIN_YEAR } from "./query-limits";
 import { DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT, type SearchOptions } from "./search";
 
 export { MAX_QUERY_LENGTH, MIN_QUERY_LENGTH } from "./query-limits";
 
-const year = z.coerce.number().int().min(1810).max(2100);
+const year = z.coerce.number().int().min(MIN_YEAR).max(MAX_YEAR);
 
 const schema = z
   .object({

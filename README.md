@@ -377,6 +377,15 @@ written, from the same events.
 - **It can be stopped**, and leaving the page stops it too: no quota is spent
   on an answer nobody reads. The limits per minute come back as a message with
   the seconds to wait.
+- **Filters** by type of regulation and by years, the same ones the API takes.
+- **The question lives in the address** (`/es?q=...&type=Ley&from=2020`): a link
+  opens with its answer, and going back or reloading shows the answer already
+  given without asking again (decision 50).
+- **Changing the language loses nothing**: the question being written and its
+  filters come along, and an answer already given stays, in the language it was
+  written in, with a button to ask for it in the new one. Without JavaScript the form
+  still takes the question to the address, and the page says it needs
+  JavaScript to write the answer.
 
 The events are read with `fetch`, not `EventSource`: `EventSource` reconnects
 on its own when a stream ends, which here would ask the model again, and it
@@ -530,7 +539,7 @@ npm run db:migrate && npm run test:integration
       citations and amounts checked in code, a second search in the words of the
       law, rate limits and an answer evaluation
 - [ ] **6. Interface** — search screen with linked citations and filters
-      (the answer screen is built; filters and shareable links come next)
+      (built: answers, filters, shareable links; browser tests come next)
 - [ ] **7. Release** — screenshots, architecture notes and a public demo
 
 ## Data source and disclaimer

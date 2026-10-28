@@ -50,6 +50,8 @@
     "rewritten": "Las normas encontradas no respondían. Se buscó de nuevo como: «{query}».",
     "rewrittenNothing": "La nueva búsqueda no trajo normas distintas.",
     "stopped": "Se detuvo la respuesta.",
+    "otherLanguage": "Esta respuesta se escribió en inglés, antes de cambiar el idioma.",
+    "answerAgain": "Responder en español",
     "answerHeading": "Respuesta",
     "sourcesHeading": "Fuentes",
     "outcome": {
@@ -82,6 +84,21 @@
       "showText": "Ver el fragmento",
       "earlier": "Normas anteriores con un texto casi idéntico:",
       "older": "y {count} más antiguas"
-    }
+    },
+    "filters": {
+      "heading": "Filtros",
+      "type": "Tipo de norma",
+      "anyType": "Todas",
+      "types": {
+        "Ley": "Leyes",
+        "Decreto": "Decretos",
+        "Decreto/Ley": "Decretos-ley"
+      },
+      "from": "Desde el año",
+      "to": "Hasta el año",
+      "clear": "Quitar filtros",
+      "yearsOrder": "El año inicial no puede ser posterior al final."
+    },
+    "noscript": "Esta página necesita JavaScript para escribir la respuesta. La pregunta quedó en la dirección: al activarlo, se responde sola."
   }
 }

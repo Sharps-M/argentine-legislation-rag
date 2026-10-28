@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
@@ -10,9 +9,12 @@ import { daysAgo, fill } from "@/i18n/format";
 import { databaseProbe } from "@/server/health-probe";
 import { latestRuns, updateStatus, type UpdateStatus } from "@/update/status";
 
-import { Ask } from "./ask";
+import { queryFromParams } from "@/ui/ask-query";
 
-export default async function HomePage({ params }: PageProps<"/[lang]">) {
+import { Ask } from "./ask";
+import { LanguageLinks } from "./language-links";
+
+export default async function HomePage({ params, searchParams }: PageProps<"/[lang]">) {
   const { lang } = await params;
   if (!hasLocale(lang)) notFound();
 
@@ -39,24 +41,17 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
           <p className="mt-2 text-lg text-muted">{dict.home.tagline}</p>
         </div>
 
-        <nav aria-label={dict.language.label} className="flex gap-1 text-sm">
-          {locales.map((locale) => (
-            <Link
-              key={locale}
-              href={`/${locale}`}
-              hrefLang={locale}
-              aria-current={locale === lang ? "page" : undefined}
-              className="rounded-md px-2 py-1 text-muted hover:text-foreground aria-[current=page]:bg-surface aria-[current=page]:font-medium aria-[current=page]:text-foreground"
-            >
-              {dict.language[locale]}
-            </Link>
-          ))}
-        </nav>
+        <LanguageLinks
+          lang={lang}
+          locales={locales}
+          label={dict.language.label}
+          names={{ es: dict.language.es, en: dict.language.en }}
+        />
       </header>
 
       <p>{dict.home.intro}</p>
 
-      <Ask lang={lang} texts={dict.ask} />
+      <Ask lang={lang} texts={dict.ask} initial={queryFromParams(await searchParams)} />
 
       <footer className="mt-auto space-y-3 border-t border-border pt-6 text-sm text-muted">
         <p>{dict.home.disclaimer}</p>
