@@ -38,23 +38,24 @@ service, and a local model as the one that is always there.
 
 ## Tech stack
 
-| Layer          | Technology                                          |
-| -------------- | --------------------------------------------------- |
-| Framework      | Next.js 16 (App Router), React 19                   |
-| Language       | TypeScript (strict, `noUncheckedIndexedAccess`)     |
-| Database       | PostgreSQL 17 with pgvector                         |
-| Data access    | Drizzle ORM and SQL migrations                      |
-| AI             | Vercel AI SDK, Ollama (`bge-m3`), Gemini or local   |
-| Vector search  | pgvector HNSW index, cosine distance                |
-| Validation     | Zod (environment and input)                         |
-| Styling        | Tailwind CSS 4, light and dark themes               |
-| i18n           | Spanish and English, locale-prefixed routes         |
-| Testing        | Vitest (unit and integration against real Postgres) |
-| Infrastructure | Docker Compose, GitHub Actions                      |
+| Layer          | Technology                                                             |
+| -------------- | ---------------------------------------------------------------------- |
+| Framework      | Next.js 16 (App Router), React 19                                      |
+| Language       | TypeScript (strict, `noUncheckedIndexedAccess`)                        |
+| Database       | PostgreSQL 17 with pgvector                                            |
+| Data access    | Drizzle ORM and SQL migrations                                         |
+| AI             | Vercel AI SDK, Ollama (`bge-m3`), Gemini or local                      |
+| Vector search  | pgvector HNSW index, cosine distance                                   |
+| Validation     | Zod (environment and input)                                            |
+| Styling        | Tailwind CSS 4, light and dark themes                                  |
+| i18n           | Spanish and English, locale-prefixed routes                            |
+| Testing        | Vitest (unit, integration against real Postgres), Playwright (browser) |
+| Infrastructure | Docker Compose, GitHub Actions                                         |
 
 ## Getting started
 
-Requirements: Node.js 22+, Docker and, for the embeddings,
+Requirements: Node.js 22.23.4+, 24.22.1+ or 26.12.1+ (the security releases of
+October 2026), Docker and, for the embeddings,
 [Ollama](https://ollama.com) (pgvector 0.8 or newer comes with the Docker image).
 
 ```bash
@@ -497,24 +498,25 @@ prints every answer to be read.
 
 ## Scripts
 
-| Command                    | What it does                             |
-| -------------------------- | ---------------------------------------- |
-| `npm run dev`              | Start the development server             |
-| `npm run build`            | Production build                         |
-| `npm run lint`             | ESLint                                   |
-| `npm run typecheck`        | Generate route types and run `tsc`       |
-| `npm run format:check`     | Prettier check                           |
-| `npm test`                 | Unit tests                               |
-| `npm run test:integration` | Integration tests (needs `DATABASE_URL`) |
-| `npm run db:migrate`       | Apply SQL migrations                     |
-| `npm run ingest`           | Load regulations from the InfoLEG data   |
-| `npm run texts`            | Download, clean and chunk the full texts |
-| `npm run embed`            | Generate the embedding of each chunk     |
-| `npm run update`           | Bring the corpus up to date with InfoLEG |
-| `npm run search`           | Semantic search from the command line    |
-| `npm run ask`              | Answer a question, citing its sources    |
-| `npm run eval`             | Measure the retrieval (recall@k, MRR)    |
-| `npm run eval:answers`     | Check a handful of answers               |
+| Command                    | What it does                                          |
+| -------------------------- | ----------------------------------------------------- |
+| `npm run dev`              | Start the development server                          |
+| `npm run build`            | Production build                                      |
+| `npm run lint`             | ESLint                                                |
+| `npm run typecheck`        | Generate route types and run `tsc`                    |
+| `npm run format:check`     | Prettier check                                        |
+| `npm test`                 | Unit tests                                            |
+| `npm run test:integration` | Integration tests (needs `DATABASE_URL`)              |
+| `npm run test:e2e`         | Browser tests of the page (needs the database server) |
+| `npm run db:migrate`       | Apply SQL migrations                                  |
+| `npm run ingest`           | Load regulations from the InfoLEG data                |
+| `npm run texts`            | Download, clean and chunk the full texts              |
+| `npm run embed`            | Generate the embedding of each chunk                  |
+| `npm run update`           | Bring the corpus up to date with InfoLEG              |
+| `npm run search`           | Semantic search from the command line                 |
+| `npm run ask`              | Answer a question, citing its sources                 |
+| `npm run eval`             | Measure the retrieval (recall@k, MRR)                 |
+| `npm run eval:answers`     | Check a handful of answers                            |
 
 The integration tests empty the tables they use, so they refuse to run against
 a database that holds a real ingestion. Use a separate database for them:
@@ -524,6 +526,22 @@ docker compose exec db createdb -U normativa normativa_test
 export DATABASE_URL=postgres://normativa:normativa@localhost:5432/normativa_test
 npm run db:migrate && npm run test:integration
 ```
+
+The browser tests (Playwright) need only the database server of
+`docker compose up -d db`. They make a database of their own on it,
+`normativa_e2e`, load the nine fixture regulations, and answer with a fake
+model server, so no real model is called and the corpus is never touched. They
+build the app and serve it on port 3100:
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+They cover what unit tests cannot see: the sources before the answer, a
+citation leading to its source, stopping without asking again, the filters in
+the request and the address, a link opening with its answer, going back,
+reloading, changing the language, and the page without JavaScript.
 
 ## Roadmap
 
@@ -538,9 +556,9 @@ npm run db:migrate && npm run test:integration
 - [x] **5. Cited answers** — streamed answers from a chain of models, with
       citations and amounts checked in code, a second search in the words of the
       law, rate limits and an answer evaluation
-- [ ] **6. Interface** — search screen with linked citations and filters
-      (built: answers, filters, shareable links; browser tests come next)
-- [ ] **7. Release** — screenshots, architecture notes and a public demo
+- [x] **6. Interface** — answers as they are written, with linked citations,
+      filters and shareable links; a weekly update of the corpus; browser tests
+- [ ] **7. Release** — screenshots, architecture notes and a tagged version
 
 ## Data source and disclaimer
 

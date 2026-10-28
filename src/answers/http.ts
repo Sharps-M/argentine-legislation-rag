@@ -102,21 +102,27 @@ export async function answerResponse(
   }
 
   let pending: IteratorResult<AnswerEvent, void> | undefined = first;
+  // The reader can leave while an event is being waited for: what arrives
+  // after that has nowhere to go, and is not an error.
+  let cancelled = false;
   const body = new ReadableStream<Uint8Array>({
     async pull(controller) {
       try {
         const next = pending ?? (await events.next());
         pending = undefined;
+        if (cancelled) return;
 
         if (next.done) controller.close();
         else controller.enqueue(encoder.encode(formatEvent(next.value)));
       } catch (error) {
+        if (cancelled) return;
         console.error(error);
         controller.error(error);
       }
     },
     // The reader went away: stop asking the model for more.
     async cancel() {
+      cancelled = true;
       await events.return();
     },
   });

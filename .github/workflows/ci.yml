@@ -60,3 +60,47 @@ jobs:
       - run: npm ci
       - run: npm run db:migrate
       - run: npm run test:integration
+
+  e2e:
+    name: Browser tests (Playwright)
+    runs-on: ubuntu-latest
+
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: normativa
+          POSTGRES_PASSWORD: normativa
+          POSTGRES_DB: normativa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U normativa -d normativa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The tests create their own database, normativa_e2e, on this server.
+      DATABASE_URL: postgres://normativa:normativa@localhost:5432/normativa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          # The newest 22.x, not the one cached on the runner: security fixes.
+          check-latest: true
+          cache: npm
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

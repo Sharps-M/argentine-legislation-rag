@@ -43,3 +43,8 @@ next-env.d.ts
 
 # downloaded datasets
 /data/
+
+# browser tests
+/test-results/
+/playwright-report/
+/blob-report/

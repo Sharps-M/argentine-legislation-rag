@@ -1008,6 +1008,66 @@ texto mientras se escribe; no se hizo.
 el corpus tiene (decisión 29). Se ocultan en un desplegable que se abre solo si
 la dirección trae alguno.
 
+## 51. Tests de navegador con su propia base y un modelo falso
+
+**Problema**: los errores de la pantalla ocurren entre React, la barra de
+direcciones y el servidor, donde un test unitario no llega. El botón "Detener"
+que volvía a enviar la pregunta (decisión 48) solo apareció en un navegador, y
+hasta ahora esas pruebas se hacían a mano.
+**Decisión**: `npm run test:e2e` prueba la página con Playwright, en Chromium,
+contra la versión compilada (`next build` y `next start`), y corre en CI como un
+tercer trabajo.
+**Su propia base**: los tests crean `normativa_e2e` en el mismo servidor de
+PostgreSQL, la migran y cargan las nueve normas de prueba. La base con el corpus
+real nunca se toca: ni siquiera se lee su `.env` más allá de `DATABASE_URL`, y
+si la base de los tests tuviera más de 500 normas, se niegan a correr, como los
+de integración.
+**Un modelo falso**: un servidor chico imita a Ollama. Vectoriza con el mismo
+_hashing_ de los tests de integración y responde citando la primera fuente, una
+palabra a la vez, para que se pueda ver, y detener, la respuesta mientras se
+escribe. Así los tests no dependen de un modelo, de una clave ni de la red, y
+cada corrida responde lo mismo.
+**Qué cubren**: las fuentes antes que el texto, una cita que lleva a su fuente,
+detener sin volver a preguntar, los filtros en el pedido y en la dirección, un
+enlace que abre con su respuesta, un enlace con un filtro inválido, "Atrás",
+recargar, cambiar de idioma con y sin respuesta, una pregunta demasiado corta y
+la página sin JavaScript.
+**Lo que encontraron al escribirlos**: el servidor registraba un error cada vez
+que alguien dejaba una respuesta mientras el modelo pensaba. El texto que
+llegaba después se escribía en un flujo ya cerrado. No le hacía daño a nadie,
+pero llenaba el registro de errores falsos; ahora se descarta, con un test
+unitario que lo reproduce.
+**Uno a la vez**: comparten un servidor y una base, así que corren en un solo
+_worker_. Son once y tardan unos 35 segundos, más la compilación.
+
+## 52. Parches de seguridad de octubre de 2026
+
+**Node.js**: el 21 de octubre de 2026 salieron 22.23.4, 24.22.1 y 26.12.1, con
+diez CVE; cuatro son altas, entre ellas una escritura fuera de límites en el
+decodificador Brotli y dos formas de pasar la verificación de certificados TLS.
+`engines` en `package.json` pide esas versiones o más nuevas, y `.npmrc` tiene
+`engine-strict=true`, así que `npm install` y `npm ci` se niegan a instalar en
+un Node.js sin los parches. En CI, `check-latest` hace que se use la última
+22.x y no la que el ejecutor tenga guardada.
+**Dependencias**: `npm audit` informaba una vulnerabilidad crítica y tres altas.
+
+| Paquete              | Antes  | Después | Por qué                                                                             |
+| -------------------- | ------ | ------- | ----------------------------------------------------------------------------------- |
+| `next`               | 16.3.8 | 16.4.3  | Crítica: ejecución remota de código en la optimización de imágenes y en `use cache` |
+| `eslint-config-next` | 16.3.8 | 16.4.3  | Acompaña la versión de Next.js                                                      |
+| `zod`                | 4.6.5  | 4.6.7   | Alta: agotamiento de memoria con colecciones muy grandes                            |
+| `undici`             | 7.30.0 | 7.30.1  | Alta (la usa el AI SDK): certificados TLS, redirecciones, denegación de servicio    |
+| `vite`               | 8.3.2  | 8.3.5   | Alta (la usa Vitest, solo en desarrollo)                                            |
+
+El proyecto no usa la optimización de imágenes ni `use cache`, así que la
+crítica no lo alcanzaba. Igual se actualizó: lo que no se usa hoy puede usarse
+mañana, y la actualización dentro de la misma versión mayor no rompió nada.
+**Lo que quedó**: cuatro avisos moderados de `esbuild` 0.18, que llega por
+`drizzle-kit`. Se trata del servidor de desarrollo de `esbuild`, y
+`drizzle-kit` no lo levanta: solo genera migraciones. La corrección que ofrece
+`npm audit fix --force` instala `drizzle-kit` 0.18, una versión vieja e
+incompatible. Se acepta hasta que `drizzle-kit` actualice esa dependencia.
+
 ---
 
 ## Desarrollo asistido por IA

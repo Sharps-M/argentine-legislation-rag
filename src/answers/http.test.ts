@@ -202,6 +202,35 @@ describe("answerResponse", () => {
 
     expect(stopped).toBe(true);
   });
+
+  it("lets the reader leave while the model is still thinking, without an error", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    let release = () => {};
+    const thinking = new Promise<void>((resolve) => (release = resolve));
+    const response = await answerResponse(params("q=tope de servicios"), {
+      search: searchFinding([searchHit()]),
+      chat: (): ChatModel => ({
+        provider: "fake",
+        model: "fake-model",
+        async *stream() {
+          await thinking;
+          yield { type: "text", text: "tarde" };
+        },
+      }),
+    });
+
+    const reader = response.body!.getReader();
+    await reader.read(); // sources
+    const waiting = reader.read();
+    // Long enough for the stream to be waiting on the model.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const leaving = reader.cancel();
+    release();
+    await leaving;
+
+    expect(await waiting).toEqual({ done: true, value: undefined });
+    expect(errors).not.toHaveBeenCalled();
+  });
 });
 
 describe("answerResponse, limits", () => {
